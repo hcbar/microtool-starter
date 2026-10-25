@@ -1,0 +1,13 @@
+{
+  "name": "image-size-tool-preview",
+  "compatibility_date": "2026-10-24",
+  "workers_dev": true,
+  "preview_urls": false,
+  "assets": {
+    "directory": "./dist",
+    "html_handling": "force-trailing-slash"
+  },
+  "observability": {
+    "enabled": false
+  }
+}

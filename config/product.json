@@ -1,0 +1,20 @@
+{
+  "slug": "image-size-tool",
+  "brand": "Image Size Tool",
+  "siteUrl": "",
+  "profile": "local",
+  "indexable": false,
+  "defaultLocale": "en",
+  "locales": ["en", "pt", "es"],
+  "monetization": {
+    "policy": "responsible",
+    "adsEnabled": false,
+    "analyticsEnabled": false,
+    "premiumEnabled": false
+  },
+  "content": {
+    "en": {"title": "Reduce image file size online", "description": "Compress a JPG or PNG toward a chosen size in your browser. Files stay on your device.", "hero": "Make your image smaller", "lead": "Choose a target size and compress a photo without sending it to a server.", "upload": "Choose image", "target": "Target size (KB)", "action": "Compress image", "download": "Download compressed image", "note": "Works locally. Browser memory and format support vary.", "error": "Unable to compress this file. Try a JPG or PNG image.", "status": "Working..."},
+    "pt": {"title": "Diminuir tamanho de imagem online", "description": "Comprima JPG ou PNG até um tamanho-alvo no navegador, sem enviar a foto para um servidor.", "hero": "Diminua o tamanho da sua foto", "lead": "Escolha um limite em KB e comprima a imagem no próprio navegador.", "upload": "Escolher imagem", "target": "Tamanho-alvo (KB)", "action": "Comprimir imagem", "download": "Baixar imagem comprimida", "note": "Processamento local. Limites de memória e formatos dependem do navegador.", "error": "Não foi possível comprimir o arquivo. Tente JPG ou PNG.", "status": "Processando..."},
+    "es": {"title": "Reducir el tamaño de una imagen en línea", "description": "Comprime JPG o PNG hasta un tamaño objetivo desde tu navegador, sin enviar la foto a un servidor.", "hero": "Reduce el tamaño de tu foto", "lead": "Elige un límite en KB y comprime la imagen en tu navegador.", "upload": "Elegir imagen", "target": "Tamaño objetivo (KB)", "action": "Comprimir imagen", "download": "Descargar imagen comprimida", "note": "Procesamiento local. La compatibilidad depende del navegador.", "error": "No se pudo comprimir el archivo. Prueba con JPG o PNG.", "status": "Procesando..."}
+  }
+}

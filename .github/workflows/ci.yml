@@ -1,0 +1,40 @@
+name: Verify starter-derived product
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm run verify
+      - name: Install pinned browser test harness
+        run: |
+          python3 -m venv "$RUNNER_TEMP/microtool-browser-venv"
+          "$RUNNER_TEMP/microtool-browser-venv/bin/pip" install --no-cache-dir playwright==1.57.0
+          "$RUNNER_TEMP/microtool-browser-venv/bin/python" -m playwright install --with-deps chromium
+      - name: Browser smoke: three locales, actual compression, cancellation
+        run: "$RUNNER_TEMP/microtool-browser-venv/bin/python" tests/browser-smoke.py
+      - run: npm run manifest
+      - name: Assert clean source after verification
+        run: git diff --exit-code -- . ':(exclude)wrangler.preview.jsonc' ':(exclude)wrangler.production.jsonc'
+      - name: Upload build and manifest for review
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: tested-site-${{ github.sha }}
+          path: |
+            dist/
+            release-manifest.json
+          retention-days: 14

@@ -1,0 +1,41 @@
+# Intentional NON-deploying preview preflight. No Cloudflare credentials are read.
+# Do not add a token-bearing deploy step until an independently reviewed,
+# lockfile-pinned publisher + destination guard has been implemented and tested.
+name: Preview release preflight (no deploy)
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type PREFLIGHT to validate a preview candidate (does NOT publish)
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  preflight:
+    if: github.ref == 'refs/heads/main' && inputs.confirmation == 'PREFLIGHT'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Validate preview files and isolation
+        env:
+          DEPLOY_TARGET: preview
+        run: |
+          npm run verify
+          node scripts/preview-target-check.mjs
+          npm run manifest
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: preview-preflight-${{ github.sha }}
+          path: |
+            dist/
+            release-manifest.json
+          retention-days: 14

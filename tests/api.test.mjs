@@ -1,0 +1,3 @@
+import test from 'node:test';import assert from 'node:assert/strict';import worker from '../worker/api.mjs';
+test('API exposes only health by default',async()=>{const r=await worker.fetch(new Request('https://example.test/api/health'));assert.equal(r.status,200);assert.deepEqual(await r.json(),{ok:true});assert.equal(r.headers.get('cache-control'),'no-store');});
+test('API has no generic proxy or alternate methods',async()=>{for(const [url,method] of [['https://example.test/api/health','POST'],['https://example.test/api/fetch?url=https://evil.test','GET']]){const r=await worker.fetch(new Request(url,{method}));assert.equal(r.status,404)}});
