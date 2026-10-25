@@ -18,11 +18,13 @@
 - Do not assume a flag allows advertising: scripts/data sharing require a separate documented integration.
 - Do not add arbitrary outbound fetch/proxy to backend without SSRF threat model, allowlist, timeouts, size limits, quotas.
 - Don't claim tests passed if not run, mobile hardware tested if only emulated, or that AI review proves no vulnerabilities.
-- Preserve existing work. No commit/push/PR/merge/deploy without user's authorization.
+- Preserve existing work. Task authorization may permit branch/commit/push/PR only within the named repository and ticket scope; record that authorization in the handoff. It never implies permission to merge, deploy, change credentials or repository protections. Those actions require separate explicit authorization.
 - Fast loop: test smallest affected behavior locally; full CI on final candidate, don't rerun unrelated expensive suites after docs-only edits.
 
 ## Standard handoff (short)
-`SCOPE | BASE+SHA | FILES | TESTS (actual) | SECURITY IMPLICATION | RISKS | NEEDS USER APPROVAL`
+`EXECUTOR | TASK+AUTHORIZATION | STATE | BASE+SHA | PR | FILES | CHECKS (actual, links) | REVIEWER (actual or pending) | SECURITY IMPLICATION | LIMITS | HUMAN GATES`
+
+Use the state/evidence contract in `docs/orchestration.md`. Implementer self-checks are not independent review. An unavailable executor must be reported as `EXECUTOR_UNAVAILABLE`, never silently replaced.
 
 ## Acceptance
 - Existing tasks function in a real browser with documented limits and no silent failure.
