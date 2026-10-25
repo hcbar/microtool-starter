@@ -51,6 +51,7 @@ def main():
                     page = browser.new_page(accept_downloads=True)
                     page.on('request', lambda req: browser_requests.append(req.url))
                     page.goto(HOST)
+                    page.evaluate('''() => { window.__revokedURLs = []; const f = URL.revokeObjectURL; URL.revokeObjectURL = u => { window.__revokedURLs.push(u); return f.call(URL,u); }; }''')
                     png = fixture_png()
                     assert len(png) > 16*1024
                     page.locator('#file').set_input_files({'name':'test.png','mimeType':'image/png','buffer':png})
@@ -66,7 +67,33 @@ def main():
                     out = Path(path).read_bytes()
                     assert out.startswith(b'\xff\xd8')
                     assert len(out) <= 16*1024, f'JPEG exceeded requested 16 KiB: {len(out)}'
+                    # Validate that an already-small JPEG is still decoded and produces
+                    # a valid JPEG, rather than bypassing validation based on MIME.
+                    page.locator('#file').set_input_files({'name':'small.jpg','mimeType':'image/jpeg','buffer':out})
+                    assert page.evaluate('window.__revokedURLs.length') >= 1, 'prior Blob URL not revoked after input replacement'
+                    page.locator('#target').fill('128')
+                    page.locator('button[type=submit]').click()
+                    page.locator('#download').wait_for(state='visible',timeout=30000)
+                    with page.expect_download() as second_download:
+                        page.locator('#download').click()
+                    second_out = Path(second_download.value.path()).read_bytes()
+                    assert second_out[:2] == b'\xff\xd8' and len(second_out) > 64
+                    # A JPEG-looking MIME value cannot make arbitrary bytes downloadable.
+                    page.locator('#file').set_input_files({'name':'fake.jpg','mimeType':'image/jpeg','buffer':b'not a jpeg'})
+                    page.locator('button[type=submit]').click()
+                    page.locator('#status').get_by_text('Could not process',exact=False).wait_for(timeout=10000)
+                    assert page.locator('#download').is_hidden()
+                    # Even a tiny PNG header claiming huge dimensions is rejected.
+                    huge_png = bytearray(33)
+                    huge_png[:16] = bytes([137,80,78,71,13,10,26,10,0,0,0,13,73,72,68,82])
+                    huge_png[16:20] = (30000).to_bytes(4,'big')
+                    huge_png[20:24] = (30000).to_bytes(4,'big')
+                    page.locator('#file').set_input_files({'name':'huge.png','mimeType':'image/png','buffer':bytes(huge_png)})
+                    page.locator('button[type=submit]').click()
+                    page.locator('#status').get_by_text('Could not process',exact=False).wait_for(timeout=10000)
+                    assert page.locator('#download').is_hidden()
                     # Force a delayed decode, invalidate with input change, reject late publication.
+                    page.locator('#file').set_input_files({'name':'test.png','mimeType':'image/png','buffer':png})
                     page.evaluate('''() => { const old = window.createImageBitmap; window.createImageBitmap = (...args) => new Promise((resolve,reject) => setTimeout(() => old(...args).then(resolve,reject), 400)); }''')
                     page.locator('#target').fill('1')
                     page.locator('button[type=submit]').click()
