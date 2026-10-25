@@ -59,6 +59,12 @@ This produces prerendered HTML in `/`, `/pt/`, `/es/` and canonical/hreflang, si
 
 `config/product.json`: `monetization.policy: responsible`, `adsEnabled: false`, `analyticsEnabled: false`, `premiumEnabled: false`. These flags are **gates**, not working integrations. Enabling them without a reviewed integration intentionally fails `npm run check`. Consult [MONETIZATION.md](MONETIZATION.md) before any scripts, cookies, consent or CSP changes.
 
+## Audit remediation candidate (v0.2.2)
+
+Following independent Astra audit of `main@3874749`, this candidate removes the unchecked small-JPEG bypass (every image is decoded and output is re-encoded as JPEG, avoiding accidental retention of source metadata), prechecks known JPEG/PNG/WebP dimensions from a bounded header sample, and makes preview and indexable-production checks independent. Node regressions and Chromium browser smoke cover invalid JPEG, valid small JPEG, oversized declared dimensions and stale operations. Native decoding may still use device-dependent memory; `noindex` and a green CI do not grant deployment authorization.
+
+The audit still BLOCKS real preview and production deployment until branch protection, an independently reviewed locked publisher, exact artifact identity, isolated credentials, remote smoke/rollback and supply-chain pinning are implemented and verified. See `docs/audit-remediation.md`.
+
 ## CI / releases
 
 - CI (`.github/workflows/ci.yml`) checks config, generates HTML, runs deterministic Node tests AND a real Chromium smoke (file compression, downloaded JPEG, three locales, mobile, invalidation of stale result, external requests), validates CSP/noindex and records SHA256 assets.

@@ -27,6 +27,7 @@ def main():
                 page.add_style_tag(content=(ROOT/'src/style.css').read_text())
                 page.add_script_tag(content=image)
                 page.add_script_tag(content=app)
+                page.evaluate('''() => { window.__revokedURLs = []; const f = URL.revokeObjectURL; URL.revokeObjectURL = u => { window.__revokedURLs.push(u); return f.call(URL,u); }; }''')
                 assert page.locator('meta[name="robots"]').get_attribute('content')=='noindex,nofollow'
                 assert page.locator('html').get_attribute('lang').startswith(locale)
                 assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
@@ -39,6 +40,20 @@ def main():
                     with page.expect_download() as info:page.locator('#download').click()
                     out=Path(info.value.path()).read_bytes()
                     assert out[:2]==b'\xff\xd8' and len(out)<=16384,(out[:2],len(out))
+                    # Previously a fake, small JPEG bypassed the decoder entirely.
+                    page.locator('#file').set_input_files({'name':'fake.jpg','mimeType':'image/jpeg','buffer':b'not a jpeg'})
+                    assert page.evaluate('window.__revokedURLs.length') >= 1, 'prior Blob URL not revoked'
+                    page.locator('button').click()
+                    page.locator('#status').get_by_text('Could not process',exact=False).wait_for(timeout=10000)
+                    assert page.locator('#download').is_hidden()
+                    page.locator('#file').set_input_files({'name':'small.jpg','mimeType':'image/jpeg','buffer':out})
+                    page.locator('#target').fill('128')
+                    page.locator('button').click()
+                    page.locator('#download').wait_for(state='visible',timeout=30000)
+                    with page.expect_download() as info2:page.locator('#download').click()
+                    out2=Path(info2.value.path()).read_bytes()
+                    assert out2[:2]==b'\xff\xd8',out2[:2]
+                    page.locator('#file').set_input_files({'name':'test.png','mimeType':'image/png','buffer':file})
                     # Hold native decode and change input before completion: no stale download.
                     page.evaluate('''() => {const original=window.createImageBitmap;window.createImageBitmap=(...a)=>new Promise((ok,bad)=>setTimeout(()=>original(...a).then(ok,bad),450));}''')
                     page.locator('#target').fill('1')
