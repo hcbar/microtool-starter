@@ -8,7 +8,7 @@ permissions:
   contents: read
 jobs:
   verify:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 12
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
@@ -22,8 +22,8 @@ jobs:
       - run: npm run verify
       - name: Install pinned browser test harness
         run: |
-          python3 -m venv "$RUNNER_TEMP/microtool-browser-venv"
-          "$RUNNER_TEMP/microtool-browser-venv/bin/pip" install --no-cache-dir playwright==1.57.0
+          python3.12 -m venv "$RUNNER_TEMP/microtool-browser-venv"
+          "$RUNNER_TEMP/microtool-browser-venv/bin/pip" install --no-cache-dir --only-binary=:all: --require-hashes -r tests/requirements-browser.txt
           "$RUNNER_TEMP/microtool-browser-venv/bin/python" -m playwright install --with-deps chromium
       - name: "Browser smoke: three locales, actual compression, cancellation"
         run: |
