@@ -25,8 +25,9 @@ jobs:
           python3 -m venv "$RUNNER_TEMP/microtool-browser-venv"
           "$RUNNER_TEMP/microtool-browser-venv/bin/pip" install --no-cache-dir playwright==1.57.0
           "$RUNNER_TEMP/microtool-browser-venv/bin/python" -m playwright install --with-deps chromium
-      - name: Browser smoke: three locales, actual compression, cancellation
-        run: "$RUNNER_TEMP/microtool-browser-venv/bin/python" tests/browser-smoke.py
+      - name: "Browser smoke: three locales, actual compression, cancellation"
+        run: |
+          "$RUNNER_TEMP/microtool-browser-venv/bin/python" tests/browser-smoke.py
       - run: npm run manifest
       - name: Assert clean source after verification
         run: git diff --exit-code -- . ':(exclude)wrangler.preview.jsonc' ':(exclude)wrangler.production.jsonc'
