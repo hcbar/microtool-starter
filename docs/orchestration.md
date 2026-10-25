@@ -8,8 +8,12 @@ SCOPED → ASSIGNED → IMPLEMENTED → CI_PASSED → REVIEWED → APPROVED → 
 
 Each transition requires the previous state's evidence and the following evidence for
 the same candidate. Unknown, failed or pending is not passed. Never skip a gate.
-Changing the candidate SHA invalidates CI, review and approval for the old candidate;
-return to IMPLEMENTED and obtain fresh evidence. The record lives in the PR body
+Evidence is bound to the tuple `base_sha + head_sha + tested_merge_sha`.
+Changing base or head invalidates CI_PASSED; return to IMPLEMENTED, retest the
+integration and re-evaluate affected review and approval before restoring gates.
+If main advances while head stays unchanged, fresh integration CI is mandatory.
+Changing head invalidates the old candidate's CI, review and approval.
+The record lives in the PR body
 and linked check/review/release records, avoiding a commit containing its own SHA.
 
 <!-- handoff-contract:start -->
@@ -19,7 +23,7 @@ and linked check/review/release records, avoiding a commit containing its own SH
     {"name":"SCOPED","actor":"coordinator","evidence":["task","scope","acceptance","authorization"]},
     {"name":"ASSIGNED","actor":"coordinator","evidence":["executor","base"]},
     {"name":"IMPLEMENTED","actor":"implementer","evidence":["sha","pr","files","local_checks","limits","human_gates"]},
-    {"name":"CI_PASSED","actor":"ci","evidence":["sha","check_urls","required_checks_passed"]},
+    {"name":"CI_PASSED","actor":"ci","evidence":["sha","base_sha","head_sha","tested_merge_sha","check_urls","required_checks_passed"]},
     {"name":"REVIEWED","actor":"independent_reviewer","evidence":["sha","reviewer","review_url","findings","blocking_findings_resolved"]},
     {"name":"APPROVED","actor":"owner","evidence":["sha","approval_url","authorized_action","target"]},
     {"name":"RELEASED","actor":"release_operator","evidence":["sha","artifact","target","release_url","smoke","rollback"]}
@@ -34,8 +38,11 @@ and linked check/review/release records, avoiding a commit containing its own SH
 - IMPLEMENTED: one implementer supplies the exact head SHA, PR, changed files and
   actual local results. Include skipped checks, security implications and limits.
 - CI_PASSED: inspect every required PR check's final successful result and URL.
-  Record both head SHA and tested merge SHA when CI tests a synthetic merge commit.
-  A local pass or green run on another SHA cannot establish this state.
+  Record base SHA, head SHA and tested merge SHA when CI tests a synthetic merge.
+  Verify the tuple against the actual CI checkout/logs and GitHub commit metadata;
+  a declared merge SHA alone is not evidence. For head-only CI, record that mode
+  explicitly rather than inventing a tested merge. A local pass or green run on
+  another tuple cannot establish this state.
 - REVIEWED: name the real independent reviewer (Astra for this pilot), review link,
   findings and disposition of blockers for the exact candidate. CI and implementer
   self-review cannot establish independent review; pending review stays pending.
@@ -49,6 +56,12 @@ Handoff summary must include real executor, task/authorization, current state,
 base and candidate SHA, PR, files, actual local/CI checks and references, real
 reviewer or pending, security implications, limits and human gates. Later evidence
 updates the PR record; never claim events merely because they are planned.
+
+The structural validator does not authenticate actors, sessions, links or events.
+An `independent_reviewer` label or editable PR text is not an authorization gate.
+Humans must inspect original evidence. Future merge/deploy automation must verify
+identity, authorization and candidate evidence through trusted APIs and controls
+outside editable PR content; this pilot implements no such automation.
 
 Run `node --test tests/orchestration.test.mjs` for the focused documentation gate;
 it is also included by the existing `npm test` and `npm run verify` commands.

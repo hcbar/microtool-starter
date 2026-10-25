@@ -9,7 +9,7 @@ const evidence = [
   ['task', 'scope', 'acceptance', 'authorization'],
   ['executor', 'base'],
   ['sha', 'pr', 'files', 'local_checks', 'limits', 'human_gates'],
-  ['sha', 'check_urls', 'required_checks_passed'],
+  ['sha', 'base_sha', 'head_sha', 'tested_merge_sha', 'check_urls', 'required_checks_passed'],
   ['sha', 'reviewer', 'review_url', 'findings', 'blocking_findings_resolved'],
   ['sha', 'approval_url', 'authorized_action', 'target'],
   ['sha', 'artifact', 'target', 'release_url', 'smoke', 'rollback'],
@@ -24,6 +24,8 @@ function validate(text) {
   assert.deepEqual(contract.states.map(state => state.name), names, 'ordered gates must not be skipped');
   contract.states.forEach((state, index) => {
     assert.equal(state.actor, actors[index], `separate authority for ${state.name}`);
+    assert.ok(Array.isArray(state.evidence), `${state.name} evidence must be an array`);
+    assert.ok(state.evidence.every(field => typeof field === 'string'), `${state.name} evidence must contain strings`);
     for (const field of evidence[index]) {
       assert.ok(state.evidence.includes(field), `${state.name} requires ${field}`);
     }
@@ -44,6 +46,16 @@ test('handoff gate rejects skipped CI, self-review and lost authorization/eviden
   });
   assert.throws(() => validate(mutate(states => states.splice(3, 1))));
   assert.throws(() => validate(mutate(states => { states[4].actor = 'implementer'; })));
+  assert.throws(() => validate(mutate(states => {
+    states.forEach(state => { state.evidence = state.evidence.join(','); });
+  })), 'evidence strings must not pass substring checks');
+  for (let index = 0; index < names.length; index++) {
+    for (const malformed of [null, {}, 42, [...evidence[index], 42]]) {
+      assert.throws(() => validate(mutate(states => {
+        states[index].evidence = malformed;
+      })), `${names[index]} rejects malformed evidence`);
+    }
+  }
   for (let index = 0; index < names.length; index++) {
     for (const field of evidence[index]) {
       assert.throws(() => validate(mutate(states => {
@@ -51,4 +63,14 @@ test('handoff gate rejects skipped CI, self-review and lost authorization/eviden
       })), `${names[index]} must retain ${field}`);
     }
   }
+});
+
+// Documentation regression only: this does not validate live transitions.
+test('contract requires fresh CI when main advances with unchanged head', () => {
+  const rule = 'If main advances while head stays unchanged, fresh integration CI is mandatory.';
+  const requireRule = text => assert.ok(text.includes(rule), 'base-only advancement must require retest');
+  requireRule(document);
+  assert.throws(() => requireRule(document.replace(rule, 'Old CI remains valid.')));
+  assert.ok(document.includes('Changing base or head invalidates CI_PASSED'));
+  assert.ok(document.includes('Verify the tuple against the actual CI checkout/logs and GitHub commit metadata'));
 });
