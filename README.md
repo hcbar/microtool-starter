@@ -84,3 +84,12 @@ See [Windows GitHub setup](docs/github-setup-windows.md). This package is a loca
 5. Wire an approved production publisher with rollback and account budget alarms; then consider the starter stable.
 
 **Recorte is read-only reference:** no files, secrets, namespaces, Deployments, DNS, or quotas in `hcbar/recorte` are touched by this project. The archived version of its process lives in its `AGENTS.md` and `.agents/skills/workers-development-review-release/SKILL.md`.
+
+## Codex bridge pilot: DISABLED / DRY_RUN
+
+Issue #4 adds a read-only diagnostic workflow, with **no Codex executor** and no
+LIVE switch. It neither writes code nor opens PRs. This implementation PR is
+created by the manually started Codex task, separately from the bridge.
+See [the command, security contract and remaining gates](docs/codex-dry-run.md).
+No OpenAI key is configured or needed. Future OpenAI Platform/API usage has
+separate billing from ChatGPT Plus and requires explicit budget approval.
