@@ -93,6 +93,29 @@ def main():
                     assert page.evaluate('window.__revoked.length')>=4
                     page.screenshot(path=str(OUT/('mobile.png' if mobile else 'desktop.png')),full_page=True)
                     choose(page,'renamed.mp4',(ROOT/'tests/fixtures/tone.ogg').read_bytes());convert(page)
+                    # Exactly two P2 regressions: video outlasts audio; AAC starts
+                    # at +3s. Generate with the pinned WASM and verify the premise.
+                    for offset in [0,3]:
+                        fixture=page.evaluate('''async offset => {
+                          const {FFmpeg}=await import('/assets/ffmpeg/index.js');
+                          const ff=new FFmpeg();
+                          try {
+                            await ff.load({coreURL:location.origin+'/assets/core/ffmpeg-core.js',wasmURL:location.origin+'/assets/core/ffmpeg-core.wasm'});
+                            const args=['-f','lavfi','-i','color=c=blue:s=32x32:d=5'];
+                            if(offset) args.push('-itsoffset',String(offset));
+                            args.push('-f','lavfi','-i','sine=frequency=440:duration=2:sample_rate=48000','-map','0:v:0','-map','1:a:0','-c:v','mpeg4','-c:a','aac','regression.mp4');
+                            if(await ff.exec(args)!==0) throw Error('fixture');
+                            await ff.ffprobe(['-show_format','-show_streams','-of','json','-o','info.json','regression.mp4']);
+                            return {bytes:Array.from(await ff.readFile('regression.mp4')),info:JSON.parse(await ff.readFile('info.json','utf8'))};
+                          } finally {ff.terminate();}
+                        }''',offset)
+                        audio=next(s for s in fixture['info']['streams'] if s['codec_type']=='audio')
+                        assert abs(float(fixture['info']['format']['duration'])-5)<.1,fixture['info']
+                        assert abs(float(audio['duration'])-2)<.1 and abs(float(audio['start_time'])-offset)<.1,audio
+                        name=f'video5-audio2-offset{offset}.mp4'
+                        choose(page,name,bytes(fixture['bytes']))
+                        result=convert(page)  # actual downloaded audio/mpeg decoded to ~2s
+                        records.append({'mobile_viewport':mobile,'input':name,'source_probe':fixture['info'],**result})
                     # Exercise the duration boundary with synthetic media built by the
                     # same pinned core, then release its generator worker before testing.
                     resources.phase_start()

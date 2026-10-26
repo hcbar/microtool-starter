@@ -70,3 +70,68 @@ Primary references checked 2026-10-26:
 - [FFmpeg legal and source obligations](https://www.ffmpeg.org/legal.html)
 - [Upstream source/build recipe](https://github.com/ffmpegwasm/ffmpeg.wasm/tree/f876f907c7e9b9bf51d4ed0b913a855a63ae63fc)
 - [GPL v2](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html)
+
+## P1 follow-up — bounded provenance investigation (2026-10-26)
+
+**Conclusion: the exact corresponding source is not demonstrated by the public
+records inspected. Publication remains BLOCKED.** This does not establish that
+upstream cannot supply it; it establishes that the available evidence below is
+insufficient. No core rebuild, dependency change or upstream contact was made.
+
+Rechecked the installed ESM WASM with `sha256sum`: it is still
+`9f57947a5bd530d8f00c5b3f2cb2a3492faa7e5d823315342d6a8656d0a6b7b7`.
+`npm view @ffmpeg/core@0.12.10 gitHead dist --json` returns no `gitHead`, no
+`dist.attestations`, five package files, and integrity
+`sha512-dzNplnn2Nxle2c2i2rrDhqcB19q9cglCkWnoMTDN9Q9l3PvdjZWd1HfSPjCNWc/p8Q3CT+Es9fWOR0UhAeYQZA==`
+(the lockfile value). A registry signature authenticates a package record; it
+does not identify all sources used to build its embedded binary.
+
+The useful new lead is the actual
+[core release commit 71aa99d](https://github.com/ffmpegwasm/ffmpeg.wasm/commit/71aa99d37c02a7b4c435275ca9ef50e612f6efa1),
+dated 2025-01-07, whose
+[package metadata](https://github.com/ffmpegwasm/ffmpeg.wasm/blob/71aa99d37c02a7b4c435275ca9ef50e612f6efa1/packages/core/package.json)
+declares 0.12.10. This is a source candidate, **not proof that it produced the
+installed hash**. Its
+[Dockerfile](https://github.com/ffmpegwasm/ffmpeg.wasm/blob/71aa99d37c02a7b4c435275ca9ef50e612f6efa1/Dockerfile)
+uses Emscripten 3.1.40 without an image digest, FFmpeg n5.1.4, mutable LAME
+`master` and x264 `4-cores`, plus other dependency tags. It copies local
+`src/fftools`, bindings and build scripts, and links the GPL video libraries.
+Resolving those branches today cannot establish their build-time commits.
+
+The
+[workflow at that commit](https://github.com/ffmpegwasm/ffmpeg.wasm/blob/71aa99d37c02a7b4c435275ca9ef50e612f6efa1/.github/workflows/CI.yml)
+uploads compiled `packages/core/dist/*`, not a complete source/dependency manifest
+or a binary-to-source attestation. The Actions API query for that exact head
+returned no runs; absence now does not prove no historic build existed. The
+[release inventory](https://github.com/ffmpegwasm/ffmpeg.wasm/releases) has no
+complete corresponding-source asset identified for this core. The nearby
+[v12.14 release](https://github.com/ffmpegwasm/ffmpeg.wasm/releases/tag/v12.14)
+has `packages.zip`, but its
+[source package](https://github.com/ffmpegwasm/ffmpeg.wasm/blob/d3c018aa40a241384965268f0506b73f47dee60c/packages/core/package.json)
+declares core 0.12.9. Neither it nor wrapper tag v0.12.10 proves correspondence
+for core 0.12.10. No third-party mirror was accepted as evidence.
+
+To close this for the existing hash, obtain from the builder a source archive
+and immutable manifest for FFmpeg, every linked library and submodule, patches,
+bindings, scripts/configuration, toolchain identification and notices, with
+build records linking them to the hash above. Then independently check the
+manifest, licensing and binary/build correspondence. Merely reproducing a
+version string is insufficient; byte-identical reproduction would be strong
+additional evidence but is not asserted here.
+
+Distribution would need an accessible, versioned corresponding-source archive
+alongside the binary plus applicable notices/license texts and reviewed application
+terms. The current notice and GPL text alone do not close that gate. See the
+[FFmpeg licensing guidance](https://www.ffmpeg.org/legal.html) and the linked GPL
+text above; LGPL checklist steps must not be mistaken for clearance of this GPL
+build. No source delivery has been activated.
+
+If the builder cannot supply the missing record, the owner's next decision is:
+
+| Alternative (not implemented) | Benefit | Remaining cost / uncertainty |
+|---|---|---|
+| Fully pinned audio-only FFmpeg core | Preserve the current decoding/encoding path while controlling source inventory and excluding unused GPL video codecs | Estimated several engineering days for build, notices, license review and five-format/browser/boundary validation; LGPL obligations still need review; size/speed gains must be measured |
+| Smaller alternative pipeline, e.g. browser decoding plus a separately licensed MP3 encoder | Potentially less WASM and a simpler dependency inventory | Estimated several days of feasibility work before migration sizing; AAC/Opus/Vorbis/container support varies by browser, and encoder licensing/source obligations and output parity must be verified |
+
+These are planning estimates, not measured implementation costs or recommended
+libraries. Both require fresh authorization; neither was started.

@@ -9,7 +9,10 @@ test('limits reject empty, oversize, unsupported before reading',()=>{
 });
 test('content probe requires supported container, audio and bounded duration',()=>{
   assert.equal(validateProbe(probe),2);
-  for(const p of [{...probe,streams:[]},{...probe,format:{format_name:'wav',duration:'2'}},{...probe,format:{format_name:'ogg',duration:'NaN'}},{...probe,format:{format_name:'ogg',duration:'361'}},{...probe,streams:[{codec_type:'audio',codec_name:'mp3'}]}]) assert.throws(()=>validateProbe(p));
+  assert.equal(validateProbe({...probe,format:{format_name:'ogg',duration:'NaN'}}),2);
+  const track = fields => ({...probe,streams:[{codec_type:'audio',codec_name:'opus',...fields}]});
+  assert.equal(validateProbe(track({duration_ts:'96000',time_base:'1/48000',start_time:'3'})),2);
+  for(const p of [{...probe,streams:[]},{...probe,format:{format_name:'wav',duration:'2'}},track({}),track({duration:'NaN'}),track({duration:'361'}),track({duration:'0'}),track({duration:'2',start_time:'bad'}),track({duration_ts:'96000',time_base:'1/0'}),{...probe,streams:[{codec_type:'audio',codec_name:'mp3'}]}]) assert.throws(()=>validateProbe(p));
 });
 function fake({loadError=false,stall=false,exit=0}={}) {
   return {terminated:0,calls:[],on(){},async load(){if(loadError) throw Error('load');if(stall) await new Promise(()=>{});},async writeFile(){},async ffprobe(){return 0;},async exec(args){this.calls.push(args);return exit;},async readFile(name){return name.endsWith('.json')?JSON.stringify(probe):new Uint8Array([1,2,3]);},terminate(){this.terminated++;}};

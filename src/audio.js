@@ -10,8 +10,18 @@ export function validateProbe(info) {
   const audio = info.streams?.find(s => s.codec_type === 'audio');
   if (!audio) throw Error('audio');
   if (!['aac','opus','vorbis'].includes(audio.codec_name)) throw Error('format');
-  const duration = Number(info.format.duration);
-  if (!Number.isFinite(duration) || duration <= 0 || duration > MAX_SECONDS || Number(audio.duration) > MAX_SECONDS) throw Error('duration');
+  // Stream duration is a length, not an end timestamp: never subtract
+  // start_time or compare against a container that may include longer video.
+  const present = value => value !== undefined && value !== null && value !== '' && value !== 'N/A';
+  if (present(audio.start_time) && !Number.isFinite(Number(audio.start_time))) throw Error('duration');
+  let duration = Number(audio.duration);
+  if (!present(audio.duration)) {
+    const parts = String(audio.time_base).split('/').map(Number);
+    if (!present(audio.duration_ts) || parts.length !== 2 || !parts.every(n => Number.isFinite(n) && n > 0)) throw Error('duration');
+    duration = Number(audio.duration_ts) * parts[0] / parts[1];
+  }
+  // Missing or invalid selected-track timing is rejected conservatively.
+  if (!Number.isFinite(duration) || duration <= 0 || duration > MAX_SECONDS) throw Error('duration');
   return duration;
 }
 async function createCodec() {
@@ -61,7 +71,7 @@ export async function convertToMP3(file, {
       onStage('converting');
       // Do not trust container duration alone. Bound actual decoded output too;
       // an overlong result is rejected, never silently returned as a truncation.
-      const args = ['-v','error','-protocol_whitelist','file,pipe','-format_whitelist','mov,ogg','-i','input','-map','0:a:0','-vn','-sn','-dn','-map_metadata','-1','-t','361','-ac','2','-ar','44100','-c:a','libmp3lame','-b:a','128k','-f','mp3','output.mp3'];
+      const args = ['-v','error','-protocol_whitelist','file,pipe','-format_whitelist','mov,ogg','-i','input','-map','0:a:0','-vn','-sn','-dn','-map_metadata','-1','-af','asetpts=PTS-STARTPTS','-t','361','-ac','2','-ar','44100','-c:a','libmp3lame','-b:a','128k','-f','mp3','output.mp3'];
       if (await ff.exec(args) !== 0) throw Error('invalid'); check();
       await ff.ffprobe(['-v','error','-show_format','-show_streams','-of','json','-o','output.json','output.mp3']);
       const output = JSON.parse(await ff.readFile('output.json','utf8'));
