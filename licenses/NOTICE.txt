@@ -1,0 +1,21 @@
+Audio to MP3 — codec notices (review candidate, no publication authorized)
+
+@ffmpeg/ffmpeg 0.12.15: MIT, Copyright (c) Jerome Wu and contributors.
+@ffmpeg/core 0.12.10: GPL-2.0-or-later, NOT MIT.
+The bundled single-thread WASM reports FFmpeg 5.1.4, Emscripten 3.1.40,
+--enable-gpl, --enable-libmp3lame, --enable-libopus, --enable-libvorbis,
+--enable-libx264 and --enable-libx265 among other libraries.
+FFmpeg copyright 2000-2023 the FFmpeg developers and external-library authors.
+
+Commercial use is possible under the applicable licenses; copyleft and source
+obligations still apply. See GPL-2.0.txt and docs/codec-licenses.md in the repo.
+
+Source/build starting point: https://github.com/ffmpegwasm/ffmpeg.wasm
+FFmpeg source: https://github.com/FFmpeg/FFmpeg/tree/n5.1.4
+Wrapper source: https://github.com/ffmpegwasm/ffmpeg.wasm/tree/main/packages/ffmpeg
+
+RELEASE BLOCKER: before any binary publication, assemble and verify the complete
+corresponding source (including external libraries, patches and build scripts),
+retain all notices, and make that source available alongside the WASM. Upstream
+version tags alone are not proof of correspondence. This review candidate does
+not certify completed distribution compliance or authorize commercial release.

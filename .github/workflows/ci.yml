@@ -25,7 +25,7 @@ jobs:
           python3.12 -m venv "$RUNNER_TEMP/microtool-browser-venv"
           "$RUNNER_TEMP/microtool-browser-venv/bin/pip" install --no-cache-dir --only-binary=:all: --require-hashes -r tests/requirements-browser.txt
           "$RUNNER_TEMP/microtool-browser-venv/bin/python" -m playwright install --with-deps chromium
-      - name: "Browser smoke: three locales, actual compression, cancellation"
+      - name: "Browser smoke: three locales, actual MP3 conversion, cancellation"
         run: |
           "$RUNNER_TEMP/microtool-browser-venv/bin/python" tests/browser-smoke.py
       - run: npm run manifest
@@ -38,4 +38,5 @@ jobs:
           path: |
             dist/
             release-manifest.json
+            test-results/
           retention-days: 14
