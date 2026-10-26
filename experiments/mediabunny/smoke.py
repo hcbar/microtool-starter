@@ -1,0 +1,103 @@
+"""Bounded codec spike. Run with the repository's locked Python 3.12 harness.
+Serves only on loopback; does not change the product build or its CSP.
+"""
+import functools, http.server, json, threading, time
+from pathlib import Path
+from playwright.sync_api import sync_playwright
+
+ROOT = Path(__file__).resolve().parents[2]
+OUT = ROOT / 'test-results/mediabunny'
+BASE = '/experiments/mediabunny/node_modules/'
+
+class Handler(http.server.SimpleHTTPRequestHandler):
+    def log_message(self, *args): pass
+    def do_GET(self):
+        if self.path == '/spike':
+            body = ('<!doctype html><script type="importmap">{"imports":{"mediabunny":"'
+                    + BASE + 'mediabunny/dist/bundles/mediabunny.min.mjs"}}</script>').encode()
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/html')
+            self.end_headers()
+            self.wfile.write(body)
+        else: super().do_GET()
+
+def main():
+    OUT.mkdir(parents=True, exist_ok=True)
+    server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), functools.partial(Handler, directory=str(ROOT)))
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    origin = f'http://127.0.0.1:{server.server_port}'
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(args=['--no-sandbox'])
+            page = browser.new_page()
+            requests = []
+            page.on('request', lambda r: requests.append({'url':r.url, 'method':r.method, 'body':r.post_data}))
+            page.goto(origin + '/spike')
+            # Generate the two P2 regression inputs with the existing pinned core.
+            page.evaluate('''async () => {
+              const {FFmpeg}=await import('/dist/assets/ffmpeg/index.js');
+              const ff=new FFmpeg(); window.regressions=[];
+              try {
+                await ff.load({coreURL:location.origin+'/dist/assets/core/ffmpeg-core.js',wasmURL:location.origin+'/dist/assets/core/ffmpeg-core.wasm'});
+                for(const offset of [0,3]) {
+                  const args=['-f','lavfi','-i','color=c=blue:s=32x32:d=5'];
+                  if(offset) args.push('-itsoffset',String(offset));
+                  args.push('-f','lavfi','-i','sine=frequency=440:duration=2:sample_rate=48000','-map','0:v:0','-map','1:a:0','-c:v','mpeg4','-c:a','aac','-y','regression.mp4');
+                  if(await ff.exec(args)!==0) throw Error('fixture generation');
+                  window.regressions.push(new File([await ff.readFile('regression.mp4')],`video5-audio2-offset${offset}.mp4`));
+                }
+              } finally {ff.terminate();}
+            }''')
+            start = time.monotonic()
+            result = page.evaluate('''async () => {
+              const m=await import('mediabunny');
+              const {registerMp3Encoder}=await import('/experiments/mediabunny/node_modules/@mediabunny/mp3-encoder/dist/bundles/mediabunny-mp3-encoder.mjs');
+              registerMp3Encoder();
+              const files=[];
+              for(const name of ['tone.mp4','tone.m4a','tone.ogg','tone.opus','tone-vorbis.ogg']) {
+                files.push(new File([await (await fetch('/tests/fixtures/'+name)).blob()],name));
+              }
+              files.push(...window.regressions);
+              const records=[];
+              for(const file of files) {
+                const start=performance.now();let input;
+                try {
+                  input=new m.Input({source:new m.BlobSource(file),formats:m.ALL_FORMATS});
+                  const track=await input.getPrimaryAudioTrack();
+                  if(!track) throw Error('no audio');
+                  const codec=await track.getCodec();const canDecode=await track.canDecode();
+                  if(!canDecode) {records.push({name:file.name,codec,canDecode,status:'UNSUPPORTED_DECODER'});continue;}
+                  const first=await track.getFirstTimestamp();const end=await track.computeDuration();
+                  const target=new m.BufferTarget();
+                  const output=new m.Output({format:new m.Mp3OutputFormat(),target});
+                  const conversion=await m.Conversion.init({input,output,tracks:'primary',video:{discard:true},audio:{codec:'mp3',bitrate:128000,sampleRate:44100,numberOfChannels:2},trim:{start:Math.max(0,first),end},tags:{}});
+                  if(!conversion.isValid) throw Error(JSON.stringify(conversion.discardedTracks));
+                  await conversion.execute();
+                  const blob=new Blob([target.buffer],{type:'audio/mpeg'});
+                  const check=new m.Input({source:new m.BlobSource(blob),formats:[m.MP3]});
+                  const outTracks=await check.getTracks();
+                  const outputCodec=await (await check.getPrimaryAudioTrack()).getCodec();
+                  check.dispose();
+                  const ac=new AudioContext();
+                  const decoded=await ac.decodeAudioData(target.buffer.slice(0));await ac.close();
+                  const samples=decoded.getChannelData(0);let energy=0;for(const v of samples) energy+=v*v;
+                  const rms=Math.sqrt(energy/samples.length);
+                  const record={name:file.name,status:'PASS',codec,canDecode,first,end,bytes:blob.size,type:blob.type,outputCodec,tracks:outTracks.length,duration:decoded.duration,rms,ms:Math.round(performance.now()-start)};
+                  if(outputCodec!=='mp3'||outTracks.length!==1||Math.abs(decoded.duration-2)>.15||rms<.01) throw Error(JSON.stringify(record));
+                  records.push(record);
+                } catch(e) {records.push({name:file.name,status:'FAIL',error:String(e)});}
+                finally {input?.dispose();}
+              }
+              return {records,userAgent:navigator.userAgent};
+            }''')
+            result['browser'] = browser.version
+            result['elapsed_seconds'] = round(time.monotonic()-start, 2)
+            result['requests'] = requests
+            assert all((r['url'].startswith(origin+'/') or r['url'].startswith('blob:'+origin+'/')) and r['method']=='GET' and r['body'] is None for r in requests), requests
+            (OUT/'smoke.json').write_text(json.dumps(result, indent=2)+'\n')
+            print(json.dumps({k:v for k,v in result.items() if k!='requests'}, indent=2))
+            browser.close()
+            assert len(result['records']) == 7 and all(r['status']=='PASS' for r in result['records']), result['records']
+    finally: server.shutdown(); server.server_close()
+
+if __name__ == '__main__': main()

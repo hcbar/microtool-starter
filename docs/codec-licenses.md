@@ -135,3 +135,16 @@ If the builder cannot supply the missing record, the owner's next decision is:
 
 These are planning estimates, not measured implementation costs or recommended
 libraries. Both require fresh authorization; neither was started.
+
+## Authorized replacement spike — 2026-10-26
+
+The owner subsequently authorized a bounded Mediabunny/LAME prototype in
+[PR #11](https://github.com/hcbar/microtool-starter/pull/11#issuecomment-6409801470).
+Its [report, reproduction and source inventory](../experiments/mediabunny/README.md)
+and [measured evidence](../experiments/mediabunny/evidence.json) record seven real
+Chromium conversions passing with pinned packages. The embedded LAME binary
+matches an immutable upstream precompiled artifact, but its full corresponding
+source/build and LGPL replacement-delivery path remain unverified:
+**FUNCTIONAL_PASS / LICENSE_BLOCK**. The stopping criterion applies; no product
+codec migration, manual rebuild or publication was performed. The FFmpeg gates
+above remain in effect. Independent focal review of the spike remains pending.

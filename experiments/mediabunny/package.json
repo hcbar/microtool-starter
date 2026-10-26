@@ -1,0 +1,8 @@
+{
+  "name": "microtool-mediabunny-spike",
+  "private": true,
+  "dependencies": {
+    "@mediabunny/mp3-encoder": "1.62.1",
+    "mediabunny": "1.62.1"
+  }
+}
