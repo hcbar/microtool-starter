@@ -7,16 +7,23 @@ permissions:
   contents: read
   issues: read
   actions: read
-concurrency:
-  group: codex-dry-run-${{ github.repository_id }}-${{ github.event.issue.number }}
-  cancel-in-progress: false
 jobs:
   dry-run:
     if: >-
+      github.event_name == 'issue_comment' &&
+      github.event.action == 'created' &&
+      github.event.sender.id == 154026289 &&
+      github.event.sender.type == 'User' &&
+      github.event.comment.user.id == 154026289 &&
+      github.event.comment.user.type == 'User' &&
+      github.actor_id == '154026289' &&
       github.repository == 'hcbar/microtool-starter' &&
       github.event.issue.number == 4 &&
       !github.event.issue.pull_request &&
       startsWith(github.event.comment.body, '/codex')
+    concurrency:
+      group: codex-dry-run-${{ github.repository_id }}-${{ github.event.issue.number }}
+      cancel-in-progress: false
     runs-on: ubuntu-24.04
     timeout-minutes: 3
     steps:

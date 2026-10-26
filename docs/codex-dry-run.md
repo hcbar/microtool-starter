@@ -21,7 +21,10 @@ branch can receive a new **issue comment** on open Issue #4 containing exactly:
 Replace the placeholder; no additional text, newline, paths, credentials, mode or
 repository parameters are accepted. This mechanism uses the coordinator's existing
 comment capability. It avoids assuming a label proves owner authorization. The
-workflow only wakes a diagnostic job for `/codex` comments on Issue #4; it does not
+workflow admits a diagnostic job only for `/codex` comments on Issue #4 whose
+sender/comment-author IDs are `154026289`, both types are `User`, and actor ID
+is `154026289`. These checks run in the job's `if` before runner allocation or
+job concurrency; the script repeats its full validation. It does not
 trigger on issue creation, push or PR. GitHub provides the authenticated event
 file: no public webhook or custom signature/token service is added.
 
@@ -46,17 +49,25 @@ GitHub Actions runner minutes can still count against the account's plan/quota.
 ## Duplicate policy and limits
 
 The key is `(repository, issue, exact command including base SHA)`. A per-issue
-concurrency group serializes diagnostics with `cancel-in-progress: false`; GitHub
-may replace a pending run, so this is not a reliable delivery queue. The script
-reads up to 1,000 runs of this workflow (issue_comment only) and rejects any earlier
-matching run title, including failed or cancelled runs. Same-run retries are also
-rejected. Missing, inconsistent, unavailable or excessive history fails closed as
+job concurrency group serializes authorized diagnostics with
+`cancel-in-progress: false`; GitHub may replace a pending run, so this is not a reliable delivery queue. The script
+reads up to 1,000 authorized runs of this workflow using the server-side filters
+`actor=hcbar&event=issue_comment`. Every returned run must have `actor.id=154026289`,
+`actor.type=User` and `actor.login=hcbar` before any title/run-ID comparison; missing
+or inconsistent actors mean `DEDUP_UNVERIFIED`, never a valid duplicate. This checks
+that the server filter is respected. Third-party runs are excluded before pagination
+and cannot consume a command key or the authorized-history limit. An earlier owner
+run with matching title consumes the command even if failed, cancelled or skipped.
+Same-run retries are also rejected. Missing, inconsistent, unavailable or excessive history fails closed as
 `DEDUP_UNVERIFIED`. There is no history-based fallback that executes an agent.
 
 This is **history-bound duplicate suppression**, not durable exactly-once delivery:
 GitHub retention/deletion may erase old evidence. Concurrency protects overlapping
-jobs, not permanent storage. Untrusted comments may consume a key or runner quota
-and deny service. No side-effecting executor exists to double-charge or publish.
+jobs, not permanent storage. Third-party events still create workflow records,
+but their jobs are skipped before runner allocation and cannot occupy the job
+concurrency group. Authorized traffic, API availability/rate limits and lost history
+can still deny service; this is not a general availability guarantee.
+No side-effecting executor exists to double-charge or publish.
 A future LIVE design needs an atomic durable reservation with ownership, expiry,
 recovery and replay rules; Actions history/cache alone is insufficient. Work's
 separate best-effort dedup remains unchanged.
@@ -66,7 +77,9 @@ separate best-effort dedup remains unchanged.
 `node --test tests/codex-dry-run.test.mjs` covers valid dry-run; wrong identity/bot,
 repo/issue/PR/event; malformed command, LIVE/secret/shell-like parameters; unprotected
 or stale base; repeats/retries; pagination, truncation, API failures and workflow
-permissions/pins. `npm run verify` includes these tests. Fixtures are synthetic
+permissions/pins, the actual job expression against external/bot identities, server
+actor filtering before pagination, and rejection of inconsistent history actors.
+`npm run verify` includes these tests. Fixtures are synthetic
 unit inputs, not evidence of authenticated GitHub delivery or real sender identity.
 
 The new issue_comment workflow cannot be exercised on this unmerged PR: GitHub

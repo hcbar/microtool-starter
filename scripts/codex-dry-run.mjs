@@ -25,13 +25,16 @@ export function validateTrigger(event, context) {
 export async function diagnose(request, api) {
   const branch = await api('/branches/main');
   if (branch.name !== 'main' || branch.protected !== true || branch.commit?.sha !== request.base) fail('BASE_DENIED');
-  // Serialized by workflow concurrency. Any earlier matching run consumes the
-  // command, even failed/cancelled runs. Missing/incomplete history fails closed.
+  // Serialized by job concurrency after authentication. Only owner runs consume
+  // commands, even failed/cancelled/skipped runs. Incomplete history fails closed.
   let currentVisible = false;
   let total;
   for (let page = 1; page <= 10; page++) {
-    const history = await api(`/actions/workflows/codex-dry-run.yml/runs?event=issue_comment&per_page=100&page=${page}`);
+    const history = await api(`/actions/workflows/codex-dry-run.yml/runs?actor=hcbar&event=issue_comment&per_page=100&page=${page}`);
     if (!Number.isSafeInteger(history.total_count) || !Array.isArray(history.workflow_runs)) fail('DEDUP_UNVERIFIED');
+    // Verify the server-side actor filter before considering any identity/key.
+    if (history.workflow_runs.some(run => run?.actor?.id !== ownerId ||
+        run.actor.type !== 'User' || run.actor.login !== 'hcbar')) fail('DEDUP_UNVERIFIED');
     if (total !== undefined && total !== history.total_count) fail('DEDUP_UNVERIFIED');
     total = history.total_count;
     currentVisible ||= history.workflow_runs.some(run => String(run.id) === request.runId && run.display_title === request.runName);
