@@ -18,7 +18,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if self.path == '/spike':
             imports = {'imports': {'mediabunny': CORE_MODULE, 'mediabunny-mp3-encoder': ENCODER_MODULE}}
             body = ('<!doctype html><script type="importmap">' + json.dumps(imports)
-                    + '</script><script>window.__candidateAdapter='
+                    + '</script><link rel="icon" href="data:,"><script>window.__candidateAdapter='
                     + ('true' if CANDIDATE_ADAPTER else 'false') + '</script>').encode()
             self.send_response(200)
             self.send_header('Content-Type', 'text/html')
@@ -33,9 +33,11 @@ def main():
     origin = f'http://127.0.0.1:{server.server_port}'
     try:
         with sync_playwright() as p:
-            browser = p.chromium.launch(args=['--no-sandbox'])
+            browser = p.chromium.launch(executable_path=os.getenv('CHROMIUM_PATH') or None, args=['--no-sandbox'])
             page = browser.new_page()
-            requests = []
+            requests, browser_errors = [], []
+            page.on('pageerror', lambda e: browser_errors.append(str(e)))
+            page.on('console', lambda msg: browser_errors.append(msg.text) if msg.type == 'error' else None)
             page.on('request', lambda r: requests.append({'url':r.url, 'method':r.method, 'body':r.post_data}))
             page.goto(origin + '/spike')
             # Generate the two P2 regression inputs with the existing pinned core.
@@ -51,6 +53,8 @@ def main():
                   if(await ff.exec(args)!==0) throw Error('fixture generation');
                   window.regressions.push(new File([await ff.readFile('regression.mp4')],`video5-audio2-offset${offset}.mp4`));
                 }
+                if(await ff.exec(['-f','lavfi','-i','sine=frequency=440:duration=30:sample_rate=48000','-c:a','aac','-y','long.m4a'])!==0)throw Error('long fixture');
+                window.longTone=new File([await ff.readFile('long.m4a')],'long.m4a');
               } finally {ff.terminate();}
             }''')
             start = time.monotonic()
@@ -59,6 +63,7 @@ def main():
               const {registerMp3Encoder}=await import('mediabunny-mp3-encoder');
               if (!window.__candidateAdapter) registerMp3Encoder();
               const adapter = window.__candidateAdapter ? await import('/experiments/mediabunny/adapter.mjs') : null;
+              const {observeConversion} = await import('/experiments/mediabunny/lifecycle-probe.mjs');
               const files=[];
               for(const name of ['tone.mp4','tone.m4a','tone.ogg','tone.opus','tone-vorbis.ogg']) {
                 files.push(new File([await (await fetch('/tests/fixtures/'+name)).blob()],name));
@@ -74,9 +79,13 @@ def main():
                   const codec=await track.getCodec();const canDecode=await track.canDecode();
                   if(!canDecode) {records.push({name:file.name,codec,canDecode,status:'UNSUPPORTED_DECODER'});continue;}
                   const first=await track.getFirstTimestamp();const end=await track.computeDuration();
-                  let blob;
+                  let blob, lifecycle;
                   if (adapter) {
-                    blob=(await adapter.convertCandidate(file,{mediabunny:m,registerMp3Encoder})).blob;
+                    const observed=await observeConversion(m, real=>adapter.convertCandidate(file,{mediabunny:real,registerMp3Encoder}));
+                    if(observed.error) throw observed.error;
+                    lifecycle=observed.metrics;
+                    if(lifecycle.workersCreated!==1 || lifecycle.encodedBytes<=0) throw Error('Native encoding not observed');
+                    blob=observed.value.blob;
                   } else {
                     const target=new m.BufferTarget();
                     const output=new m.Output({format:new m.Mp3OutputFormat(),target});
@@ -93,7 +102,7 @@ def main():
                   const decoded=await ac.decodeAudioData(await blob.arrayBuffer());await ac.close();
                   const samples=decoded.getChannelData(0);let energy=0;for(const v of samples) energy+=v*v;
                   const rms=Math.sqrt(energy/samples.length);
-                  const record={name:file.name,status:'PASS',codec,canDecode,first,end,bytes:blob.size,type:blob.type,outputCodec,tracks:outTracks.length,duration:decoded.duration,rms,ms:Math.round(performance.now()-start)};
+                  const record={name:file.name,status:'PASS',lifecycle,codec,canDecode,first,end,bytes:blob.size,type:blob.type,outputCodec,tracks:outTracks.length,duration:decoded.duration,rms,ms:Math.round(performance.now()-start)};
                   if(outputCodec!=='mp3'||outTracks.length!==1||Math.abs(decoded.duration-2)>.15||rms<.01) throw Error(JSON.stringify(record));
                   records.push(record);
                 } catch(e) {records.push({name:file.name,status:'FAIL',error:String(e)});}
@@ -122,36 +131,46 @@ def main():
                 if(noAudio!=='audio')throw Error('No-audio case: '+noAudio);
                 checks.push({name:'silent.mp4',status:'PASS',error:noAudio});
 
-                // Real encoder lifecycle: cancel after initialization, when the
-                // conversion stage begins. Count native worker terminations.
-                const NativeWorker=window.Worker;
-                let workersCreated=0, workersTerminated=0, started=false, cancelError=null;
-                window.Worker=class extends NativeWorker {
-                  constructor(...args){super(...args);workersCreated++;}
-                  terminate(){workersTerminated++;return super.terminate();}
-                };
-                try {
+                const tone=files.find(f=>f.name==='tone.m4a');
+                // The stage callback precedes execute(): no worker should exist.
+                // The second case aborts only after a real worker returned MP3 bytes.
+                for(const mode of ['before-execute','during-encoding','output-error']) {
                   const controller=new AbortController();
-                  const tone=new File([await (await fetch('/tests/fixtures/tone.m4a')).blob()],'tone.m4a');
-                  try {
-                    await adapter.convertCandidate(tone,{
-                      mediabunny:m,registerMp3Encoder,signal:controller.signal,
-                      onStage: stage=>{if(stage==='converting'){started=true;controller.abort();}},
-                    });
-                  } catch(e) {cancelError=e?.name;}
-                  if(!started||cancelError!=='AbortError')
-                    throw Error('Cancel stage failed: '+JSON.stringify({started,cancelError}));
-                  for(let n=0;n<100&&workersTerminated<workersCreated;n++)
-                    await new Promise(ok=>setTimeout(ok,20));
-                  if(workersCreated===0||workersTerminated!==workersCreated)
-                    throw Error('Worker cleanup failed: '+JSON.stringify({workersCreated,workersTerminated}));
-                  checks.push({name:'abort-at-conversion-stage',status:'PASS',workersCreated,workersTerminated});
-                } finally {
-                  window.Worker=NativeWorker;
+                  let started=false, abortedWhileActive=false;
+                  const observed=await observeConversion(m, real=>adapter.convertCandidate(mode==='during-encoding'?window.longTone:tone,{
+                    mediabunny:real,registerMp3Encoder,signal:controller.signal,
+                    onStage:stage=>{
+                      if(stage==='converting') {
+                        started=true;
+                        if(mode==='before-execute')controller.abort();
+                      }
+                    },
+                  }),{
+                    onEncoded:()=>{
+                      if(mode==='during-encoding'&&!controller.signal.aborted) {
+                        abortedWhileActive=true;controller.abort();
+                      }
+                    },
+                    failWrite:mode==='output-error',
+                  });
+                  const {metrics,error,value}=observed;
+                  if(!started||value)throw Error('Expected stopped conversion: '+mode);
+                  if(mode==='output-error') {
+                    if(!String(error).includes('injected-output-write'))throw Error('Wrong output error: '+error);
+                  } else if(error?.name!=='AbortError')throw Error('Wrong cancellation: '+error);
+                  if(mode==='before-execute') {
+                    if(metrics.workersCreated!==0||metrics.encodedReplies!==0)throw Error('Premature encoder start');
+                  } else {
+                    if(metrics.workersCreated!==1||metrics.encodedBytes<=0)throw Error('No real encoding: '+JSON.stringify(metrics));
+                    if(mode==='during-encoding'&&(!abortedWhileActive||metrics.flushCommands!==0))throw Error('No active abort before flush');
+                  }
+                  checks.push({name:mode,status:'PASS',error:String(error),abortedWhileActive,...metrics});
                 }
               }
               return {records,checks,userAgent:navigator.userAgent};
             }''')
+            result['browser_errors'] = browser_errors
+            assert not browser_errors, browser_errors
             result['browser'] = browser.version
             result['source'] = {'core_module': CORE_MODULE, 'encoder_module': ENCODER_MODULE, 'candidate_adapter': CANDIDATE_ADAPTER}
             result['elapsed_seconds'] = round(time.monotonic()-start, 2)

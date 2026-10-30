@@ -17,7 +17,8 @@ test('duration handles shifted MP4 audio separately from video',()=>{
     assert.throws(()=>selectedAudioWindow(...pair),/duration/);
 });
 function mock({codec='opus',audio=true,decodable=true,outputDuration=2,execute,tracks=1}={}){
-  const info={disposes:0,cancels:0,register:0};
+  const info={disposes:0,cancels:0,register:0,executes:0};
+  let endExecution;
   class Input {
     constructor({formats}){this.output=Array.isArray(formats)&&formats.length===1;}
     async getPrimaryAudioTrack(){
@@ -35,11 +36,11 @@ function mock({codec='opus',audio=true,decodable=true,outputDuration=2,execute,t
   class Conversion {
     static async init(){return new Conversion();}
     isValid=true;
-    async execute(){if(execute)return execute(); }
-    async cancel(){info.cancels++;}
+    async execute(){info.executes++;if(execute)return Promise.race([execute(),new Promise(resolve=>{endExecution=resolve;})]); }
+    async cancel(){info.cancels++;endExecution?.();}
   }
   class BufferTarget {buffer=new ArrayBuffer(1000);}
-  return {m:{Input,Conversion,BufferTarget,BlobSource:class{},Output:class{},Mp3OutputFormat:class{},ALL_FORMATS:[],MP3:'mp3'},registerMp3Encoder:()=>{info.register++},info};
+  return {m:{Input,Conversion,BufferTarget,BlobSource:class{},Output:class{async cancel(){}},Mp3OutputFormat:class{},ALL_FORMATS:[],MP3:'mp3'},registerMp3Encoder:()=>{info.register++},info};
 }
 test('real conversion contract returns MP3 and releases both inputs',async()=>{
   const {m,registerMp3Encoder,info}=mock();
@@ -74,4 +75,42 @@ test('cancel and timeout call library cancellation',async()=>{
     await new Promise(ok=>setTimeout(ok,0));
     assert.equal(info.cancels,1);
   }
+});
+
+test('abort from converting stage never executes and awaits cleanup',async()=>{
+  const {m,registerMp3Encoder,info}=mock();
+  const controller=new AbortController();
+  let released=false;
+  const cancel=m.Conversion.prototype.cancel;
+  m.Conversion.prototype.cancel=async function(){
+    await new Promise(ok=>setTimeout(ok,10));
+    await cancel.call(this);released=true;
+  };
+  await assert.rejects(convertCandidate(file,{mediabunny:m,registerMp3Encoder,signal:controller.signal,
+    onStage:stage=>{if(stage==='converting')controller.abort();}}),{name:'AbortError'});
+  assert.equal(info.executes,0);
+  assert.equal(info.cancels,1);
+  assert.equal(released,true);
+  assert.equal(info.disposes,1);
+});
+test('execute error cancels before disposing input',async()=>{
+  const {m,registerMp3Encoder,info}=mock({execute:async()=>{throw Error('encoder');}});
+  await assert.rejects(convertCandidate(file,{mediabunny:m,registerMp3Encoder}),/encoder/);
+  assert.equal(info.cancels,1);
+  assert.equal(info.disposes,1);
+});
+
+test('abort while init is pending joins it and cancels the late conversion',async()=>{
+  const {m,registerMp3Encoder,info}=mock();
+  const init=m.Conversion.init;
+  const controller=new AbortController();
+  m.Conversion.init=async()=>{
+    controller.abort();
+    await new Promise(ok=>setTimeout(ok,10));
+    return init();
+  };
+  await assert.rejects(convertCandidate(file,{mediabunny:m,registerMp3Encoder,signal:controller.signal}),{name:'AbortError'});
+  assert.equal(info.cancels,1);
+  assert.equal(info.executes,0);
+  assert.equal(info.disposes,1);
 });

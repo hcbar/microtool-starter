@@ -35,14 +35,18 @@ export async function convertCandidate(file, {
   validateCandidateFile(file, mobile);
   signal?.throwIfAborted();
   if (!m || typeof registerMp3Encoder !== 'function') throw Error('codec');
-  let input, verify, conversion, timeout, rejectStopped, stoppedError;
+  let input, verify, conversion, output, work, timeout, rejectStopped, stoppedError;
+  let cancelPromise;
+  const cancelConversion = () => {
+    if (conversion) return cancelPromise ??= Promise.resolve().then(() => conversion.cancel());
+  };
   const stopped = new Promise((_, reject) => { rejectStopped = reject; });
   // A rejected stop promise remains observed if work finishes first.
   stopped.catch(() => {});
   const interrupt = error => {
     if (stoppedError) return;
     stoppedError = error;
-    if (conversion) void Promise.resolve().then(() => conversion.cancel()).catch(() => {});
+    void cancelConversion()?.catch(() => {});
     rejectStopped(error);
   };
   const onAbort = () => interrupt(new DOMException('Cancelled', 'AbortError'));
@@ -50,7 +54,7 @@ export async function convertCandidate(file, {
   timeout = setTimeout(() => interrupt(Error('timeout')), timeoutMs);
   const check = () => {if (stoppedError) throw stoppedError; signal?.throwIfAborted();};
   try {
-    return await Promise.race([stopped, (async () => {
+    work = (async () => {
       onStage('checking');
       input = new m.Input({source: new m.BlobSource(file), formats: m.ALL_FORMATS});
       const track = await input.getPrimaryAudioTrack(); check();
@@ -63,7 +67,7 @@ export async function convertCandidate(file, {
       check();
       registerMp3Encoder();
       const target = new m.BufferTarget();
-      const output = new m.Output({format: new m.Mp3OutputFormat(), target});
+      output = new m.Output({format: new m.Mp3OutputFormat(), target});
       conversion = await m.Conversion.init({
         input, output, tracks: 'primary', video: {discard: true},
         audio: {codec: 'mp3', bitrate: 128000, sampleRate: 44100, numberOfChannels: 2},
@@ -72,6 +76,7 @@ export async function convertCandidate(file, {
       check();
       if (!conversion.isValid) throw Error('format');
       onStage('converting');
+      check(); // A stage callback can abort before execute creates any worker.
       await conversion.execute(); check();
       const data = target.buffer;
       if (!(data instanceof ArrayBuffer) || data.byteLength < 100 ||
@@ -87,19 +92,29 @@ export async function convertCandidate(file, {
         throw Error('duration');
       check();
       return {blob, duration};
-    })()]);
+    })();
+    return await Promise.race([stopped, work]);
   } catch (error) {
     if (stoppedError) throw stoppedError;
     throw error;
   } finally {
     clearTimeout(timeout);
     signal?.removeEventListener('abort', onAbort);
-    verify?.dispose();
-    input?.dispose();
+    // A race rejection does not stop its losing task. Join it before disposing
+    // inputs; init may still assign a conversion after the abort was requested.
+    try {
+      await cancelConversion();
+      await work?.catch(() => {});
+      await cancelConversion();
+      // cancel() can return early when upstream has already started cancellation;
+      // Output.cancel() explicitly waits for its resource-release promise.
+      if (output && output.state !== 'finalized') await output.cancel();
+    } finally {
+      verify?.dispose();
+      input?.dispose();
+    }
   }
 }
 
-// Cancellation here exercises Mediabunny's cancel() contract. It does not yet
-// establish that the embedded blob worker terminates after all edge cases.
-// A disposable top-level worker or equivalent verified cleanup is mandatory
-// before promoting this adapter into a publicly distributed application.
+// Browser lifecycle evidence is provided by smoke.py against the pinned native
+// encoder worker. Production CSP, memory and distribution gates remain separate.
