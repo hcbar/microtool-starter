@@ -1,8 +1,8 @@
 import {createServer} from 'node:http';import {readFileSync,existsSync,statSync} from 'node:fs';import {resolve,sep,extname} from 'node:path';import {execFileSync} from 'node:child_process';import {readConfig} from './check.mjs';import backend from '../worker/api.mjs';
 // Rebuild on each start: never serve a stale dist after configuration or source edits.
 execFileSync(process.execPath,['scripts/build.mjs'],{stdio:'inherit',env:{...process.env,DEPLOY_TARGET:'preview'}});
-const root=resolve('dist')+sep;const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.txt':'text/plain; charset=utf-8','.xml':'application/xml'};
-const security={'x-content-type-options':'nosniff','referrer-policy':'no-referrer','x-frame-options':'DENY','permissions-policy':'camera=(), microphone=(), geolocation=(), payment=()','content-security-policy':"default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"};
+const root=resolve('dist')+sep;const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.txt':'text/plain; charset=utf-8','.xml':'application/xml','.wasm':'application/wasm'};
+const security={'x-content-type-options':'nosniff','referrer-policy':'no-referrer','x-frame-options':'DENY','permissions-policy':'camera=(), microphone=(), geolocation=(), payment=()','content-security-policy':"default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; media-src 'self' blob:; style-src 'self'; img-src 'self' blob: data:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"};
 const product=readConfig();
 const server=createServer(async(req,res)=>{
   if(!['GET','HEAD'].includes(req.method)){res.writeHead(405,security).end();return;}

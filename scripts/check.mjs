@@ -6,7 +6,7 @@ export function checkConfig(p) {
   if(!['local','backend'].includes(p.profile)) throw new Error('Invalid profile');
   if(typeof p.brand!=='string'||p.brand.length>90||p.brand.length<2) throw new Error('Invalid brand');
   if(p.defaultLocale!=='en'||JSON.stringify(p.locales)!==JSON.stringify(['en','pt','es'])) throw new Error('Localizations must be en, pt, es');
-  for(const lang of p.locales)for(const k of ['title','description','hero','lead','upload','target','action','download','note','error','status']) {
+  for(const lang of p.locales)for(const k of ['title','description','hero','lead','upload','target','action','download','note','error','status','cancel','preview','ready','cancelled','one','loading','checking','converting','need','size','format','audio','duration','invalid','timeout','codec']) {
     if(typeof p.content?.[lang]?.[k]!=='string'||p.content[lang][k].length<2) throw new Error(`Missing content ${lang}.${k}`);
   }
   if(typeof p.indexable!=='boolean')throw new Error('Missing indexable');

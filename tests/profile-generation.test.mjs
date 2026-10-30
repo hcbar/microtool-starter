@@ -8,7 +8,8 @@ import {spawnSync} from 'node:child_process';
 test('fresh backend profile generates isolated Worker endpoints and stays noindex',()=>{
   const root=mkdtempSync(join(tmpdir(),'microtool-profile-'));
   try {
-    for(const item of ['config','scripts','src','worker'])cpSync(item,join(root,item),{recursive:true});
+    for(const item of ['config','scripts','src','worker','licenses'])cpSync(item,join(root,item),{recursive:true});
+    cpSync('node_modules',join(root,'node_modules'),{recursive:true});
     const cfg=join(root,'config/product.json');
     const p=JSON.parse(readFileSync(cfg,'utf8'));
     p.slug='distinct-tool';p.brand='Distinct Tool';p.profile='backend';

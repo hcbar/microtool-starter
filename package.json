@@ -3,7 +3,9 @@
   "version": "0.2.0",
   "private": true,
   "type": "module",
-  "engines": {"node": ">=22.13.0"},
+  "engines": {
+    "node": ">=22.13.0"
+  },
   "scripts": {
     "check": "node scripts/check.mjs",
     "build": "node scripts/build.mjs",
@@ -12,5 +14,9 @@
     "verify": "npm run check && npm run build && npm test && node scripts/verify-build.mjs",
     "manifest": "node scripts/manifest.mjs",
     "new:product": "node scripts/new-product.mjs"
+  },
+  "dependencies": {
+    "@ffmpeg/core": "0.12.10",
+    "@ffmpeg/ffmpeg": "0.12.15"
   }
 }

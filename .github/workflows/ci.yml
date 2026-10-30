@@ -25,7 +25,7 @@ jobs:
           python3.12 -m venv "$RUNNER_TEMP/microtool-browser-venv"
           "$RUNNER_TEMP/microtool-browser-venv/bin/pip" install --no-cache-dir --only-binary=:all: --require-hashes -r tests/requirements-browser.txt
           "$RUNNER_TEMP/microtool-browser-venv/bin/python" -m playwright install --with-deps chromium
-      - name: "Browser smoke: three locales, actual compression, cancellation"
+      - name: "Browser smoke: three locales, actual MP3 conversion, cancellation"
         run: |
           "$RUNNER_TEMP/microtool-browser-venv/bin/python" tests/browser-smoke.py
       - run: npm run manifest
@@ -38,4 +38,31 @@ jobs:
           path: |
             dist/
             release-manifest.json
+            test-results/
           retention-days: 14
+
+  pinned-mediabunny:
+    # Narrowly scoped: evaluate fixed-source candidate only on product PR #11.
+    # No uploads, preview, deployment, secret or write permissions.
+    if: github.event_name == 'pull_request' && github.event.pull_request.number == 11
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm run build
+      - name: Install browser harness
+        run: |
+          python3.12 -m venv "$RUNNER_TEMP/pinned-browser-venv"
+          "$RUNNER_TEMP/pinned-browser-venv/bin/pip" install --no-cache-dir --only-binary=:all: --require-hashes -r tests/requirements-browser.txt
+          "$RUNNER_TEMP/pinned-browser-venv/bin/python" -m playwright install --with-deps chromium
+      - name: Test exact upstream commit in Chromium (NO artifact upload)
+        run: |
+          source "$RUNNER_TEMP/pinned-browser-venv/bin/activate"
+          bash tests/verify-pinned-mediabunny.sh

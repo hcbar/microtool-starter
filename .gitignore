@@ -18,3 +18,6 @@ release-manifest.json
 
 __pycache__/
 *.pyc
+
+# Temporary pinned Mediabunny build: never commit/distribute WASM bundles.
+experiments/mediabunny/pinned-build/

@@ -9,9 +9,9 @@ function validate(ci, requirements) {
   assert.match(ci, /runs-on: ubuntu-24\.04\b/);
   assert.match(ci, /python3\.12 -m venv/);
   const installs = ci.split('\n').filter(line => /\bpip["']?\s+install\b/.test(line));
-  assert.equal(installs.length, 1, 'one locked Python install');
+  assert.equal(installs.length, 2, 'both browser jobs use locked Python installs');
   for (const flag of ['--no-cache-dir', '--only-binary=:all:', '--require-hashes', '-r tests/requirements-browser.txt']) {
-    assert.ok(installs[0].includes(flag), `Python install requires ${flag}`);
+    assert.ok(installs.every(line => line.includes(flag)), `every Python install requires ${flag}`);
   }
   assert.match(ci, /-m playwright install --with-deps chromium/);
   const entries = requirements.split('\n').filter(line => line.trim() && !line.startsWith('#'));

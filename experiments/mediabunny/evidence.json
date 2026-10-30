@@ -1,0 +1,210 @@
+{
+  "date": "2026-10-26",
+  "executor": "Codex implementer",
+  "status": "FUNCTIONAL_PASS / LICENSE_BLOCK",
+  "smoke": {
+    "records": [
+      {
+        "name": "tone.mp4",
+        "status": "PASS",
+        "codec": "aac",
+        "canDecode": true,
+        "first": -0.021333333333333333,
+        "end": 2,
+        "bytes": 32756,
+        "type": "audio/mpeg",
+        "outputCodec": "mp3",
+        "tracks": 1,
+        "duration": 2.0375510204081633,
+        "rms": 0.08286690602307704,
+        "ms": 648
+      },
+      {
+        "name": "tone.m4a",
+        "status": "PASS",
+        "codec": "aac",
+        "canDecode": true,
+        "first": -0.021333333333333333,
+        "end": 2,
+        "bytes": 32756,
+        "type": "audio/mpeg",
+        "outputCodec": "mp3",
+        "tracks": 1,
+        "duration": 2.0375510204081633,
+        "rms": 0.08286690602307704,
+        "ms": 208
+      },
+      {
+        "name": "tone.ogg",
+        "status": "PASS",
+        "codec": "opus",
+        "canDecode": true,
+        "first": 0,
+        "end": 2,
+        "bytes": 32756,
+        "type": "audio/mpeg",
+        "outputCodec": "mp3",
+        "tracks": 1,
+        "duration": 2.0375510204081633,
+        "rms": 0.0831125854574999,
+        "ms": 281
+      },
+      {
+        "name": "tone.opus",
+        "status": "PASS",
+        "codec": "opus",
+        "canDecode": true,
+        "first": 0,
+        "end": 2,
+        "bytes": 32756,
+        "type": "audio/mpeg",
+        "outputCodec": "mp3",
+        "tracks": 1,
+        "duration": 2.0375510204081633,
+        "rms": 0.0831125854574999,
+        "ms": 251
+      },
+      {
+        "name": "tone-vorbis.ogg",
+        "status": "PASS",
+        "codec": "vorbis",
+        "canDecode": true,
+        "first": 0,
+        "end": 2,
+        "bytes": 32756,
+        "type": "audio/mpeg",
+        "outputCodec": "mp3",
+        "tracks": 1,
+        "duration": 2.0375510204081633,
+        "rms": 0.08375409497429534,
+        "ms": 221
+      },
+      {
+        "name": "video5-audio2-offset0.mp4",
+        "status": "PASS",
+        "codec": "aac",
+        "canDecode": true,
+        "first": -0.021333333333333333,
+        "end": 2,
+        "bytes": 32756,
+        "type": "audio/mpeg",
+        "outputCodec": "mp3",
+        "tracks": 1,
+        "duration": 2.0375510204081633,
+        "rms": 0.08286690602307704,
+        "ms": 210
+      },
+      {
+        "name": "video5-audio2-offset3.mp4",
+        "status": "PASS",
+        "codec": "aac",
+        "canDecode": true,
+        "first": 2.978,
+        "end": 4.999333333333333,
+        "bytes": 33174,
+        "type": "audio/mpeg",
+        "outputCodec": "mp3",
+        "tracks": 1,
+        "duration": 2.063673469387755,
+        "rms": 0.08256680499105407,
+        "ms": 262
+      }
+    ],
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/143.0.7499.4 Safari/537.36",
+    "browser": "143.0.7499.4",
+    "elapsed_seconds": 2.22,
+    "requests_summary": {
+      "total": 26,
+      "assertion": "same-origin static GET with no body or local blob URL; no outbound media"
+    }
+  },
+  "manifest": {
+    "assets": [
+      {
+        "path": "mediabunny/dist/bundles/mediabunny.min.mjs",
+        "bytes": 703759,
+        "gzip_bytes": 180617,
+        "sha256": "b365395e7cd4b130553a1203fc23c52c035aedf6d1e07d6fedb4663745b5c790"
+      },
+      {
+        "path": "@mediabunny/mp3-encoder/dist/bundles/mediabunny-mp3-encoder.mjs",
+        "bytes": 317165,
+        "gzip_bytes": 133445,
+        "sha256": "ff498bffd78530d1bc6d6ad94e06d85eb2aa099abd61fa401c733415702759a7"
+      }
+    ],
+    "total_bytes": 1020924,
+    "total_gzip_bytes": 314062,
+    "embedded_wasm": {
+      "bytes": 223033,
+      "sha256": "d0b109db83c153b81ba0080fa2163664dff1e341b154edda6d40bc4b6fbc355e"
+    },
+    "upstream_wasm_matches": true
+  },
+  "registry_attestation_statements_unverified_signatures": [
+    {
+      "_type": "https://in-toto.io/Statement/v0.1",
+      "subject": [
+        {
+          "name": "pkg:npm/%40mediabunny/mp3-encoder@1.62.1",
+          "digest": {
+            "sha512": "bf92fc67d4f6f7c21c4961af58f94618d86833663363e7ce540b5d93073a2de87c7351d79798af25504a09c4597826e9e0b0c9392bb076ed9213f57aed2668ef"
+          }
+        }
+      ],
+      "predicateType": "https://github.com/npm/attestation/tree/main/specs/publish/v0.1",
+      "predicate": {
+        "name": "@mediabunny/mp3-encoder",
+        "version": "1.62.1",
+        "registry": "https://registry.npmjs.org"
+      }
+    },
+    {
+      "_type": "https://in-toto.io/Statement/v1",
+      "subject": [
+        {
+          "name": "pkg:npm/%40mediabunny/mp3-encoder@1.62.1",
+          "digest": {
+            "sha512": "bf92fc67d4f6f7c21c4961af58f94618d86833663363e7ce540b5d93073a2de87c7351d79798af25504a09c4597826e9e0b0c9392bb076ed9213f57aed2668ef"
+          }
+        }
+      ],
+      "predicateType": "https://slsa.dev/provenance/v1",
+      "predicate": {
+        "buildDefinition": {
+          "buildType": "https://slsa-framework.github.io/github-actions-buildtypes/workflow/v1",
+          "externalParameters": {
+            "workflow": {
+              "ref": "refs/tags/v1.62.1",
+              "repository": "https://github.com/Vanilagy/mediabunny",
+              "path": ".github/workflows/release.yml"
+            }
+          },
+          "internalParameters": {
+            "github": {
+              "event_name": "release",
+              "repository_id": "850821713",
+              "repository_owner_id": "1696106"
+            }
+          },
+          "resolvedDependencies": [
+            {
+              "uri": "git+https://github.com/Vanilagy/mediabunny@refs/tags/v1.62.1",
+              "digest": {
+                "gitCommit": "f630141a4ac2936d00af14bf8ff2c5bb62b66150"
+              }
+            }
+          ]
+        },
+        "runDetails": {
+          "builder": {
+            "id": "https://github.com/actions/runner/github-hosted"
+          },
+          "metadata": {
+            "invocationId": "https://github.com/Vanilagy/mediabunny/actions/runs/39831984029/attempts/1"
+          }
+        }
+      }
+    }
+  ]
+}

@@ -6,7 +6,7 @@
 - No backend for local tools; no server persistence of user files by this app.
 - CSP restricts script/style/connect to self; denies object/frame, geolocation, microphone, camera and payment capabilities.
 - No third-party scripts, ads or analytics initially; no service workers, user accounts, cookies or data collection.
-- Reject oversize inputs: the example compressor caps files at 25 MiB and decoded images at 24 MP; a bounded 256 KiB header scan rejects known oversized JPEG/PNG/WebP dimensions **before** native decode when the dimension header is available. The 24 MP post-decode check remains necessary; unknown or unusual headers and native decoder memory usage remain residual risks.
+- Audio product limits: 25 MiB touch/mobile or 50 MiB desktop before reading; at most 6 minutes, a 120-second disposable-worker watchdog, supported container/audio probe, bounded output. See `docs/threat-model.md` for allocation and browser risks.
 - Outputs are user-initiated; object URLs are revoked on source replacement/page exit.
 - Preview is `noindex`; production indexability requires verified origin and explicit build target. The preflight publishes no bytes to Cloudflare; deployment credentials are not accessed.
 - No secrets in Git/HTML/client or logs; `.gitignore` covers common envs.
