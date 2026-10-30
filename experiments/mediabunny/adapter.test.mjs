@@ -12,7 +12,8 @@ test('candidate validates extensions, size, and mobile caps',()=>{
 test('duration handles shifted MP4 audio separately from video',()=>{
   assert.deepEqual(selectedAudioWindow(3,5),{start:3,end:5,duration:2});
   assert.deepEqual(selectedAudioWindow(0,2),{start:0,end:2,duration:2});
-  for(const pair of [[2,2],[0,361],[-1,3],[0,NaN]])
+  assert.deepEqual(selectedAudioWindow(-.022,2),{start:0,end:2,duration:2});
+  for(const pair of [[2,2],[0,361],[-2,3],[0,NaN]])
     assert.throws(()=>selectedAudioWindow(...pair),/duration/);
 });
 function mock({codec='opus',audio=true,decodable=true,outputDuration=2,execute,tracks=1}={}){
