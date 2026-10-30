@@ -23,26 +23,15 @@ test "$(git -C /tmp/mediabunny-fixed rev-parse HEAD)" = cce92cb0f131f522295dc079
 python3 experiments/mediabunny/check-pinned-wasm.py /tmp/mediabunny-fixed/packages/mp3-encoder/build/lame.js
 (cd /tmp/mediabunny-fixed && npm ci --ignore-scripts --no-audit --no-fund && npm run build)
 
-# Existing FFmpeg fixture-generator is only for local tests.
+# Existing FFmpeg is used exclusively to generate synthetic fixtures.
 npm ci --ignore-scripts --no-audit --no-fund
 npm run build
-MEDIABUNNY_CORE_MODULE=/tmp/mediabunny-fixed/dist/bundles/mediabunny.min.mjs \
-MEDIABUNNY_ENCODER_MODULE=/tmp/mediabunny-fixed/packages/mp3-encoder/dist/bundles/mediabunny-mp3-encoder.mjs \
-MEDIABUNNY_CANDIDATE_ADAPTER=1 \
-python3.12 experiments/mediabunny/smoke.py
 ```
 
-**Important:** The lightweight HTTP test server only serves files under the
-repository root. The absolute `/tmp/...` module paths in the example above
-will NOT resolve through that server. Before running, stage the generated
-bundles into a temporary directory beneath
-`experiments/mediabunny/pinned-build/` (ignored in Git), then pass URL paths
-`/experiments/mediabunny/pinned-build/mediabunny.min.mjs` and
-`/experiments/mediabunny/pinned-build/mediabunny-mp3-encoder.mjs`. The
-encoder's ESM bundle requires a browser import-map entry for `mediabunny`,
-already provided by the smoke harness. Do not commit or upload these bundles.
-
-Example staging:
+The HTTP smoke server serves only files under the repository root. Stage the
+bundles temporarily in the ignored directory and use URL paths, not absolute
+filesystem paths. The encoder's ESM import uses the import map in the harness.
+Do not commit or upload bundles.
 
 ```bash
 mkdir -p experiments/mediabunny/pinned-build
