@@ -1,20 +1,25 @@
 """Bounded codec spike. Run with the repository's locked Python 3.12 harness.
 Serves only on loopback; does not change the product build or its CSP.
 """
-import functools, http.server, json, threading, time
+import functools, http.server, json, os, threading, time
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / 'test-results/mediabunny'
 BASE = '/experiments/mediabunny/node_modules/'
+CORE_MODULE = os.getenv('MEDIABUNNY_CORE_MODULE', BASE + 'mediabunny/dist/bundles/mediabunny.min.mjs')
+ENCODER_MODULE = os.getenv('MEDIABUNNY_ENCODER_MODULE', BASE + '@mediabunny/mp3-encoder/dist/bundles/mediabunny-mp3-encoder.mjs')
+CANDIDATE_ADAPTER = os.getenv('MEDIABUNNY_CANDIDATE_ADAPTER') == '1'
 
 class Handler(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *args): pass
     def do_GET(self):
         if self.path == '/spike':
-            body = ('<!doctype html><script type="importmap">{"imports":{"mediabunny":"'
-                    + BASE + 'mediabunny/dist/bundles/mediabunny.min.mjs"}}</script>').encode()
+            imports = {'imports': {'mediabunny': CORE_MODULE, 'mediabunny-mp3-encoder': ENCODER_MODULE}}
+            body = ('<!doctype html><script type="importmap">' + json.dumps(imports)
+                    + '</script><script>window.__candidateAdapter='
+                    + ('true' if CANDIDATE_ADAPTER else 'false') + '</script>').encode()
             self.send_response(200)
             self.send_header('Content-Type', 'text/html')
             self.end_headers()
@@ -51,8 +56,9 @@ def main():
             start = time.monotonic()
             result = page.evaluate('''async () => {
               const m=await import('mediabunny');
-              const {registerMp3Encoder}=await import('/experiments/mediabunny/node_modules/@mediabunny/mp3-encoder/dist/bundles/mediabunny-mp3-encoder.mjs');
-              registerMp3Encoder();
+              const {registerMp3Encoder}=await import('mediabunny-mp3-encoder');
+              if (!window.__candidateAdapter) registerMp3Encoder();
+              const adapter = window.__candidateAdapter ? await import('/experiments/mediabunny/adapter.mjs') : null;
               const files=[];
               for(const name of ['tone.mp4','tone.m4a','tone.ogg','tone.opus','tone-vorbis.ogg']) {
                 files.push(new File([await (await fetch('/tests/fixtures/'+name)).blob()],name));
@@ -68,18 +74,23 @@ def main():
                   const codec=await track.getCodec();const canDecode=await track.canDecode();
                   if(!canDecode) {records.push({name:file.name,codec,canDecode,status:'UNSUPPORTED_DECODER'});continue;}
                   const first=await track.getFirstTimestamp();const end=await track.computeDuration();
-                  const target=new m.BufferTarget();
-                  const output=new m.Output({format:new m.Mp3OutputFormat(),target});
-                  const conversion=await m.Conversion.init({input,output,tracks:'primary',video:{discard:true},audio:{codec:'mp3',bitrate:128000,sampleRate:44100,numberOfChannels:2},trim:{start:Math.max(0,first),end},tags:{}});
-                  if(!conversion.isValid) throw Error(JSON.stringify(conversion.discardedTracks));
-                  await conversion.execute();
-                  const blob=new Blob([target.buffer],{type:'audio/mpeg'});
+                  let blob;
+                  if (adapter) {
+                    blob=(await adapter.convertCandidate(file,{mediabunny:m,registerMp3Encoder})).blob;
+                  } else {
+                    const target=new m.BufferTarget();
+                    const output=new m.Output({format:new m.Mp3OutputFormat(),target});
+                    const conversion=await m.Conversion.init({input,output,tracks:'primary',video:{discard:true},audio:{codec:'mp3',bitrate:128000,sampleRate:44100,numberOfChannels:2},trim:{start:Math.max(0,first),end},tags:{}});
+                    if(!conversion.isValid) throw Error(JSON.stringify(conversion.discardedTracks));
+                    await conversion.execute();
+                    blob=new Blob([target.buffer],{type:'audio/mpeg'});
+                  }
                   const check=new m.Input({source:new m.BlobSource(blob),formats:[m.MP3]});
                   const outTracks=await check.getTracks();
                   const outputCodec=await (await check.getPrimaryAudioTrack()).getCodec();
                   check.dispose();
                   const ac=new AudioContext();
-                  const decoded=await ac.decodeAudioData(target.buffer.slice(0));await ac.close();
+                  const decoded=await ac.decodeAudioData(await blob.arrayBuffer());await ac.close();
                   const samples=decoded.getChannelData(0);let energy=0;for(const v of samples) energy+=v*v;
                   const rms=Math.sqrt(energy/samples.length);
                   const record={name:file.name,status:'PASS',codec,canDecode,first,end,bytes:blob.size,type:blob.type,outputCodec,tracks:outTracks.length,duration:decoded.duration,rms,ms:Math.round(performance.now()-start)};
@@ -91,6 +102,7 @@ def main():
               return {records,userAgent:navigator.userAgent};
             }''')
             result['browser'] = browser.version
+            result['source'] = {'core_module': CORE_MODULE, 'encoder_module': ENCODER_MODULE, 'candidate_adapter': CANDIDATE_ADAPTER}
             result['elapsed_seconds'] = round(time.monotonic()-start, 2)
             result['requests'] = requests
             assert all((r['url'].startswith(origin+'/') or r['url'].startswith('blob:'+origin+'/')) and r['method']=='GET' and r['body'] is None for r in requests), requests
