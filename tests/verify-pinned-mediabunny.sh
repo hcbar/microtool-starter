@@ -22,11 +22,17 @@ node "$ROOT/experiments/mediabunny/check-pinned-wasm.mjs" "$TEMP/upstream/packag
 mkdir -p "$STAGED"
 cp "$TEMP/upstream/dist/bundles/mediabunny.min.mjs" "$STAGED/"
 cp "$TEMP/upstream/packages/mp3-encoder/dist/bundles/mediabunny-mp3-encoder.mjs" "$STAGED/"
-# Bundles were rebuilt from exactly the checked-out upstream revision.
-# Confirming runtime worker/bundle correspondence remains a release gate.
+node "$ROOT/experiments/mediabunny/build-isolated.mjs" "$TEMP/upstream" "$STAGED"
+# Core and codec sources remain the exact checked-out upstream revision.
+# The isolated variant replaces only the worker factory with a static, page-owned
+# worker bridge; the browser also hashes bytes actually instantiated in that worker.
+# Original inline-worker packaging is historical; isolated runtime identity is
+# checked by isolation-smoke.py. Distribution compliance remains a separate gate.
 # Build produces only the legacy fixture generator; do not upload new WASM.
 cd "$ROOT"
 MEDIABUNNY_CORE_MODULE=/experiments/mediabunny/pinned-build/mediabunny.min.mjs \
 MEDIABUNNY_ENCODER_MODULE=/experiments/mediabunny/pinned-build/mediabunny-mp3-encoder.mjs \
 MEDIABUNNY_CANDIDATE_ADAPTER=1 \
 python3.12 experiments/mediabunny/smoke.py
+
+python3.12 experiments/mediabunny/isolation-smoke.py

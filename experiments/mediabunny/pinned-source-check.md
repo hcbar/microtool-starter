@@ -37,9 +37,11 @@ Do not commit or upload bundles.
 mkdir -p experiments/mediabunny/pinned-build
 cp /tmp/mediabunny-fixed/dist/bundles/mediabunny.min.mjs experiments/mediabunny/pinned-build/
 cp /tmp/mediabunny-fixed/packages/mp3-encoder/dist/bundles/mediabunny-mp3-encoder.mjs experiments/mediabunny/pinned-build/
+node experiments/mediabunny/build-isolated.mjs /tmp/mediabunny-fixed experiments/mediabunny/pinned-build
 MEDIABUNNY_CORE_MODULE=/experiments/mediabunny/pinned-build/mediabunny.min.mjs \
 MEDIABUNNY_ENCODER_MODULE=/experiments/mediabunny/pinned-build/mediabunny-mp3-encoder.mjs \
 MEDIABUNNY_CANDIDATE_ADAPTER=1 python3.12 experiments/mediabunny/smoke.py
+python3.12 experiments/mediabunny/isolation-smoke.py
 rm -rf experiments/mediabunny/pinned-build
 ```
 
@@ -78,18 +80,108 @@ established. In particular the upstream inline-worker helper creates a blob URL
 without explicit revocation; worker termination is measured here, while blob URL
 ownership/revocation must be addressed with the production packaging decision.
 
-## Release gates
+## Isolated candidate: bounded forced termination and CSP
 
-- Confirm the encoder's runtime worker uses the same WASM as the upstream
-  `build/lame.js`; the helper inspects the Emscripten module's exact binary.
-- Independently assess LGPL/MPL notices and corresponding source plus the
-  ability to rebuild/replace the embedded library.
-- Verify production worker/blob-URL ownership, hard-stop behavior if a codec
-  hangs (cooperative cancellation can wait on upstream work), CSP, remaining edge
-  cases and memory; remove the FFmpeg dependency only after the replacement passes.
-- Keep the product PR draft and blocked from publication. The existing
-  starter CI uploads its legacy FFmpeg build; this new pinned candidate must
-  **not** be included in its upload artifacts.
+This round adds an experimental wrapper, not a migration into `src/`.
+`isolated.mjs` owns a disposable conversion worker and a native encoder worker
+**in the page**. A small `MessageChannel` bridge implements just the pinned
+encoder's worker contract; audio buffers are transferred through the page, not
+uploaded. The conversion worker runs the existing adapter, probing, decoding
+and MP3 verification. No media work runs on the page's event loop.
 
-This is technical preparation and reproduction guidance, not a claim that the
+### Existing upstream solutions considered before implementation
+
+At the fixed SHA, `Conversion.cancel()` awaits `Output.cancel()`, whose source
+closure is serialized behind pending custom-encoder work. `pauseSignal` also
+requires progress/checkpoints. Neither can interrupt a hung operation. The MP3
+encoder's `close()` terminates its private worker, but is reached through that
+serialized work and does not cover a decoder or conversion-thread hang. There
+is no public worker factory/URL injection option in this revision.
+
+The upstream build helper creates a blob URL and returns a Worker without a
+revocation step. Merely counting termination does not release that URL. Global
+patching in the application and copying/reimplementing the LAME encoder were
+rejected. The isolated package changes only the build-time `createWorker`
+import: the encoder handler and LAME bytes are compiled from their unmodified
+pinned sources into an ephemeral **static** worker script. No blob URLs are
+created by the isolated pipeline, so there are no worker URL leases to revoke.
+The original cooperative spike remains historical and still uses upstream's
+blob helper; it is not the new isolated candidate.
+
+A conversion worker with a nested LAME worker would use fewer bridge lines,
+but a controlled double busy-loop showed serial native shutdown of about 4 s
+in local Chromium. Page-owned workers terminate independently in parallel,
+about 2 s in the same test. This is why the small bridge is retained. It adds
+no extra thread, pool, persistent registry or retry mechanism.
+
+### Deadline semantics and actual shutdown evidence
+
+The page starts the timer before posting the file. `timeoutMs` is the **total**
+deadline (default 120,000 ms, must exceed 3,000 ms). It reserves the final
+3,000 ms for native shutdown and requests termination of BOTH independent
+worker handles at `timeoutMs - 3000`. Abort and fatal worker errors also
+terminate both immediately and settle after that bounded shutdown allowance.
+Normal completion and errors already cleaned up by the adapter do not incur
+that delay. Every path closes the page's bridge port and removes the abort
+listener; terminated realms reclaim the transferred ports and decoder state.
+No acknowledgment from a hung codec/decoder or `conversion.cancel()` is needed.
+
+This allowance is explicit: Chromium was observed taking about 2 s to forcibly
+interrupt a busy loop after `Worker.terminate()`. It is not an assertion that
+`terminate()` synchronously destroys a native worker, nor a universal real-time
+browser guarantee. The test requires **no native worker targets at forced-stop
+promise settlement**, and matches every creation with the browser's actual
+`Target.targetDestroyed` event. The test fails if the shutdown budget is
+insufficient; it does not merely count calls or wait indefinitely. A small
+500 ms inspector-event drain is allowed only for normal completion.
+
+### Browser validation
+
+`isolation-smoke.py` uses the application's exact CSP string from `dist/_headers`
+for the document AND worker responses:
+
+- `script-src 'self' 'wasm-unsafe-eval'`, `worker-src 'self'`, `connect-src 'self'`;
+  no worker `blob:`, remote scripts, `unsafe-inline` or general `unsafe-eval`.
+- All seven existing MP3 cases run through the isolated path and are decoded
+  with duration/RMS checks. Normal decoding explicitly closes its AudioDecoder.
+- Real cancellation on nonempty native LAME output; no-audio failure; an actual
+  encoder-worker exception after one real response; forced timeouts with a busy
+  decoder, busy encoder, and both conversion/encoder workers busy; explicit
+  cancellation after both busy-loop markers have been observed.
+- Native worker creation/destruction events and page-owned constructors are
+  observed independently. URL creation/revocation is instrumented in every
+  worker realm and the page. The isolated cases must create ZERO blob URLs.
+- The actual bytes supplied to `WebAssembly.instantiate` in the encoder worker
+  are hashed while still delegating to real instantiation. The seven successes
+  and all cases reaching encoding must match the fixed WASM hash above.
+- Negative controls remove only `wasm-unsafe-eval` from the encoder response,
+  attempt a blob worker, inline script and general JS eval. Browser CSP
+  violations/rejections must occur. The deliberately created negative-control
+  URL is explicitly revoked. These expected violations are recorded separately
+  from positive cases, which permit no CSP, page or console errors.
+
+The loopback server injects `isolation-fixtures.js` only during testing. Its
+faults use real infinite loops and an uncaught exception after real encoding;
+no fake completion, encoder reply or cooperative-cancellation acknowledgment
+is generated. Production candidate modules never import the fault harness.
+The fixed-source CI script builds everything in its disposable directory,
+runs both browser suites, and removes generated files without uploading them.
+
+## Remaining promotion/distribution gates
+
+- Repeat these assertions for the eventual delivery/package and HTTP headers;
+  the immutable source and runtime WASM identity measured here are specific to
+  this isolated packaging, not a clearance for a later npm version.
+- Independently assess LGPL/MPL notices, corresponding source, modified packaging
+  recipe and practical rebuild/replacement delivery. No legal clearance claimed.
+- Memory/CPU budgets, representative edge cases, file replacement, physical
+  phones and Safari remain unproven. Foreground Chromium timers are tested;
+  OS suspension, a frozen main page/browser process and other browsers are not
+  covered by a real-time guarantee. Browser-native teardown/decoder allocation
+  behavior remains a browser dependency, not a JavaScript safety proof.
+- Keep the PR draft and publication blocked. No app migration, deploy or new
+  product is performed. The traditional CI artifact remains its legacy FFmpeg
+  build; isolated modules/bundles/WASM must never enter that upload.
+
+This is technical preparation and reproduction guidance, not a claim that
 production adoption or legal audit has passed.
