@@ -10,7 +10,7 @@ WASM_SHA256 = "a680e507e9d91f1a4dcd6f846b9b94ff1fec7e19ff44e803358c218ddbe446a6"
 
 def validate(path):
     data = Path(path).read_bytes()
-    match = re.search(rb'base64Decode\("(AGFzbQ[^"]+)"\)', data)
+    match = re.search(rb'(AGFzbQ[A-Za-z0-9+/=]{100,})', data)
     if not match:
         raise ValueError("embedded wasm unavailable")
     wasm = base64.b64decode(match.group(1), validate=True)
