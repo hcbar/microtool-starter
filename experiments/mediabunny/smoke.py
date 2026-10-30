@@ -99,7 +99,58 @@ def main():
                 } catch(e) {records.push({name:file.name,status:'FAIL',error:String(e)});}
                 finally {input?.dispose();}
               }
-              return {records,userAgent:navigator.userAgent};
+              const checks=[];
+              if (adapter) {
+                // Reject invalid inputs BEFORE loading an encoder. The source-only
+                // adapter's error keys remain the application's expected contract.
+                for(const [name,bytes,expected] of [
+                  ['wrong.wav',new Uint8Array([1,2,3]),'format'],
+                  ['empty.ogg',new Uint8Array(0),'size'],
+                ]) {
+                  let seen=null;
+                  try {
+                    await adapter.convertCandidate(new File([bytes],name),{mediabunny:m,registerMp3Encoder});
+                  } catch(e) {seen=e?.message;}
+                  if(seen!==expected)throw Error('Validation '+name+': '+seen);
+                  checks.push({name,status:'PASS',error:seen});
+                }
+                let noAudio=null;
+                try {
+                  const silent=new File([await (await fetch('/tests/fixtures/silent.mp4')).blob()],'silent.mp4');
+                  await adapter.convertCandidate(silent,{mediabunny:m,registerMp3Encoder});
+                } catch(e) {noAudio=e?.message;}
+                if(noAudio!=='audio')throw Error('No-audio case: '+noAudio);
+                checks.push({name:'silent.mp4',status:'PASS',error:noAudio});
+
+                // Real encoder lifecycle: cancel after initialization, when the
+                // conversion stage begins. Count native worker terminations.
+                const NativeWorker=window.Worker;
+                let workersCreated=0, workersTerminated=0, started=false, cancelError=null;
+                window.Worker=class extends NativeWorker {
+                  constructor(...args){super(...args);workersCreated++;}
+                  terminate(){workersTerminated++;return super.terminate();}
+                };
+                try {
+                  const controller=new AbortController();
+                  const tone=new File([await (await fetch('/tests/fixtures/tone.m4a')).blob()],'tone.m4a');
+                  try {
+                    await adapter.convertCandidate(tone,{
+                      mediabunny:m,registerMp3Encoder,signal:controller.signal,
+                      onStage: stage=>{if(stage==='converting'){started=true;controller.abort();}},
+                    });
+                  } catch(e) {cancelError=e?.name;}
+                  if(!started||cancelError!=='AbortError')
+                    throw Error('Cancel stage failed: '+JSON.stringify({started,cancelError}));
+                  for(let n=0;n<100&&workersTerminated<workersCreated;n++)
+                    await new Promise(ok=>setTimeout(ok,20));
+                  if(workersCreated===0||workersTerminated!==workersCreated)
+                    throw Error('Worker cleanup failed: '+JSON.stringify({workersCreated,workersTerminated}));
+                  checks.push({name:'abort-at-conversion-stage',status:'PASS',workersCreated,workersTerminated});
+                } finally {
+                  window.Worker=NativeWorker;
+                }
+              }
+              return {records,checks,userAgent:navigator.userAgent};
             }''')
             result['browser'] = browser.version
             result['source'] = {'core_module': CORE_MODULE, 'encoder_module': ENCODER_MODULE, 'candidate_adapter': CANDIDATE_ADAPTER}
