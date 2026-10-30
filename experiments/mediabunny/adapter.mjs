@@ -15,7 +15,10 @@ export function selectedAudioWindow(firstTimestamp, lastTimestamp) {
   // audio end times can differ; never trust the container's video duration.
   const first = Number(firstTimestamp);
   const last = Number(lastTimestamp);
-  if (!Number.isFinite(first) || !Number.isFinite(last) || first < 0 || last <= first) throw Error('duration');
+  // AAC and Opus can start slightly before zero because of codec priming.
+  // Trim those samples at zero, as the previously passing Chromium spike did.
+  // Refuse implausibly early timestamps rather than accepting corrupt metadata.
+  if (!Number.isFinite(first) || !Number.isFinite(last) || first < -1) throw Error('duration');
   const start = Math.max(0, first);
   const duration = last - start;
   if (!Number.isFinite(duration) || duration <= 0 || duration > MAX_SECONDS) throw Error('duration');
