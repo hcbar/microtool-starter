@@ -27,7 +27,7 @@ python3 - "$STAGED/mediabunny-mp3-encoder.mjs" <<'PY'
 import base64,hashlib,re,sys
 from pathlib import Path
 data=Path(sys.argv[1]).read_bytes()
-m=re.search(rb'base64Decode\("(AGFzbQ[^"]+)"\)',data)
+m=re.search(rb'(AGFzbQ[A-Za-z0-9+/=]{100,})',data)
 if m is None: raise SystemExit("BLOCK: no embedded WASM found in runtime bundle")
 got=hashlib.sha256(base64.b64decode(m[1],validate=True)).hexdigest()
 expected="a680e507e9d91f1a4dcd6f846b9b94ff1fec7e19ff44e803358c218ddbe446a6"
