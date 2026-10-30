@@ -20,7 +20,7 @@ harness. No API keys, deploy or publishing required.
 git clone https://github.com/Vanilagy/mediabunny.git /tmp/mediabunny-fixed
 git -C /tmp/mediabunny-fixed checkout cce92cb0f131f522295dc0797962fb1f5d3c1f44
 test "$(git -C /tmp/mediabunny-fixed rev-parse HEAD)" = cce92cb0f131f522295dc0797962fb1f5d3c1f44
-python3 experiments/mediabunny/check-pinned-wasm.py /tmp/mediabunny-fixed/packages/mp3-encoder/build/lame.js
+node experiments/mediabunny/check-pinned-wasm.mjs /tmp/mediabunny-fixed/packages/mp3-encoder/build/lame.js
 (cd /tmp/mediabunny-fixed && npm ci --ignore-scripts --no-audit --no-fund && npm run build)
 
 # Existing FFmpeg is used exclusively to generate synthetic fixtures.
@@ -50,8 +50,8 @@ as PASS until separately tested.
 
 ## Release gates
 
-- Confirm the hash **from the actual JS bundle** as well as the upstream
-  `build/lame.js`; the helper checks only the latter.
+- Confirm the encoder's runtime worker uses the same WASM as the upstream
+  `build/lame.js`; the helper inspects the Emscripten module's exact binary.
 - Independently assess LGPL/MPL notices and corresponding source plus the
   ability to rebuild/replace the embedded library.
 - Verify worker isolation, abort/timeout, cleanup, CSP, all edge cases and
